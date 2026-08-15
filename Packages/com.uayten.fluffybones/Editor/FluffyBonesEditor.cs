@@ -66,7 +66,6 @@ namespace Fluffy.Editor
         private SerializedProperty _showAxes;
         private SerializedProperty _showLimits;
         private SerializedProperty _boneColor;
-        private SerializedProperty _limitColor;
 
         private UnityEditor.Editor _profileEditor;
         private SerializedObject _poseSerialized;
@@ -89,7 +88,6 @@ namespace Fluffy.Editor
             _showAxes = serializedObject.FindProperty("_showAxes");
             _showLimits = serializedObject.FindProperty("_showLimits");
             _boneColor = serializedObject.FindProperty("_boneColor");
-            _limitColor = serializedObject.FindProperty("_limitColor");
         }
 
         private void OnDisable()
@@ -381,11 +379,6 @@ namespace Fluffy.Editor
             }
 
             EditorGUILayout.PropertyField(_showLimits, new GUIContent("Show Limits"));
-
-            if (_showLimits.boolValue)
-            {
-                EditorGUILayout.PropertyField(_limitColor, new GUIContent("Limit Colour"));
-            }
 
             EditorGUILayout.HelpBox(
                 "How far a bone may turn from its pose, in degrees, per axis. Every bone "

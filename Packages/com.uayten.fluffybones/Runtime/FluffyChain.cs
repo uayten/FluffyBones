@@ -363,13 +363,15 @@ namespace Fluffy
         }
 
         /// <summary>
-        /// Draws the arc each bone is allowed to move in, starting at the bone's head:
-        /// a cone for the Y and Z swing, and a circle around the bone for the X twist.
+        /// Draws what each bone is allowed to do, starting at its head: a flat arc for
+        /// the Y swing, another for the Z, and a circle around the bone for the X twist.
         /// </summary>
         /// <remarks>
-        /// The cone is lopsided when the minimum and maximum of an axis differ, which is
-        /// the whole point of having two — it shows at a glance that a cape may fly far
-        /// one way and barely move the other.
+        /// One arc per axis rather than the rim of the cone they make together. The rim
+        /// is the truthful shape, but on a chain of bones it reads as a knot of ellipses
+        /// crossing each other, and an arc is what a number can be read off: it lies in
+        /// the plane its axis swings in, and it is lopsided exactly when that axis's
+        /// minimum and maximum differ.
         /// </remarks>
         public void DrawLimitGizmos()
         {
@@ -378,7 +380,7 @@ namespace Fluffy
                 return;
             }
 
-            Color rimColor = Gizmos.color;
+            Color previous = Gizmos.color;
             List<Transform> bones = CollectChain(_startBone, _lastBone);
 
             for (int i = 0; i < bones.Count; i++)
@@ -407,16 +409,14 @@ namespace Fluffy
                 // arc you are looking at names the field you need to edit.
                 DrawSwingArc(head, axis, towardsY, limits.SwingY, size, AxisYColor);
                 DrawSwingArc(head, axis, towardsZ, limits.SwingZ, size, AxisZColor);
-                DrawSwingRim(head, axis, towardsY, towardsZ, limits, size, rimColor);
                 DrawTwistCircle(head, axis, towardsY, towardsZ, limits.Twist, size);
             }
 
-            Gizmos.color = rimColor;
+            Gizmos.color = previous;
         }
 
         /// <summary>
-        /// The flat arc one axis may swing through, drawn in that axis's colour. This is
-        /// the shape you read a number off; the rim behind it is the two combined.
+        /// The flat arc one axis may swing through, drawn in that axis's colour.
         /// </summary>
         private static void DrawSwingArc(
             Vector3 head, Vector3 axis, Vector3 towards, Vector2 range, float length, Color color)
@@ -442,41 +442,6 @@ namespace Fluffy
             // The two edges of the arc, so where it stops is unmistakable.
             Gizmos.DrawLine(head, start);
             Gizmos.DrawLine(head, previous);
-        }
-
-        /// <summary>The lopsided rim the two swings make together — the cone seen in 3D.</summary>
-        private static void DrawSwingRim(
-            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ,
-            FluffyLimits limits, float length, Color color)
-        {
-            if (FluffyLimits.IsFree(limits.SwingY) || FluffyLimits.IsFree(limits.SwingZ))
-            {
-                return;
-            }
-
-            Gizmos.color = color;
-            Vector3 previous = Vector3.zero;
-
-            for (int step = 0; step <= ConeSegments; step++)
-            {
-                float around = step / (float)ConeSegments * Mathf.PI * 2f;
-                float cos = Mathf.Cos(around);
-                float sin = Mathf.Sin(around);
-
-                // Each quadrant uses the limit facing that way, which is what makes the
-                // rim lopsided rather than a plain ellipse.
-                float degreesY = (cos >= 0f ? limits.SwingY.y : -limits.SwingY.x) * cos;
-                float degreesZ = (sin >= 0f ? limits.SwingZ.y : -limits.SwingZ.x) * sin;
-
-                Vector3 rim = head + SwingToDirection(axis, towardsY, towardsZ, degreesY, degreesZ) * length;
-
-                if (step > 0)
-                {
-                    Gizmos.DrawLine(previous, rim);
-                }
-
-                previous = rim;
-            }
         }
 
         private static void DrawTwistCircle(

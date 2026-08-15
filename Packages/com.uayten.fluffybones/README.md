@@ -138,10 +138,14 @@ For a skirt, tight limits on the upper bones are what keep a strand from folding
 through a leg, and there the two sides are usually equal.
 
 Tick **Show Limits** to see them. Everything starts at the bone's head: a green
-arc for the Y range, a blue arc for the Z range, the rim they make together in
-the limit colour, and a red circle around the bone for the twist. All of it is
-lopsided whenever a minimum and maximum differ, so a glance tells you which way a
-bone is free to go.
+arc for the Y range, a blue arc for the Z range, and a red circle around the bone
+for the twist. Each arc is lopsided whenever a minimum and maximum differ, so a
+glance tells you which way a bone is free to go.
+
+One flat arc per axis, rather than the rim of the cone the two make together. The
+rim is the truthful shape, but a chain of them reads as a knot of ellipses, and an
+arc is the shape you can read a number off — it lies in the plane its axis swings
+in and names the field that sets it.
 
 The limits are read in the bone's own axes, which assumes the bone runs along its
 local X — the usual result of an export — so if an arc looks turned the wrong

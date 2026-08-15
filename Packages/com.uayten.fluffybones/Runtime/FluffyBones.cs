@@ -63,12 +63,10 @@ namespace Fluffy
                  "point decides how the bone swings.")]
         [SerializeField] private bool _showAxes;
 
-        [Tooltip("Draw the arc each bone may move in: a cone for the Y and Z swing, and " +
-                 "a circle around the bone for the X twist.")]
+        [Tooltip("Draw how far each bone may move: an arc for the Y swing, another for " +
+                 "the Z, and a circle around the bone for the X twist. Each in its axis " +
+                 "colour, the same ones Show Axes uses.")]
         [SerializeField] private bool _showLimits;
-
-        [Tooltip("Colour of the drawn limits.")]
-        [SerializeField] private Color _limitColor = new Color(1f, 0.85f, 0.35f, 0.9f);
 
         private Vector3 _lastPosition;
 
@@ -358,7 +356,7 @@ namespace Fluffy
 
                 if (_showLimits)
                 {
-                    Gizmos.color = _limitColor;
+                    // No colour set here: every limit shape carries its own axis colour.
                     _chains[i].DrawLimitGizmos();
                 }
             }

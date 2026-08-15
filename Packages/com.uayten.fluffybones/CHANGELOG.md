@@ -59,8 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside out. Applied in the inspector and again on the way to the solver, since
   the fields are public and a pose asset can be edited from elsewhere.
 - **Show Limits**: draws them from each bone's head, each axis in its own colour
-  — a green arc for Y, a blue one for Z, the rim they make together, and a red
-  circle for the twist. The field labels carry the same colours.
+  — a green arc for Y, a blue one for Z, and a red circle for the twist. The
+  field labels carry the same colours. One flat arc per axis rather than the rim
+  of the cone the two make together: the rim is the truthful shape, but a chain
+  of them reads as a knot of ellipses, and an arc is what a number can be read
+  off. The **Limit Colour** setting went with the rim, which was the only thing
+  it painted.
 - **Copy this chain's setup to the others**: pushes one chain's pose asset, dummy
   bone settings and profile override onto every other chain, leaving their start
   and last bones alone.
