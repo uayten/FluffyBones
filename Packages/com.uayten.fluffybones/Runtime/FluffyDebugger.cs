@@ -28,13 +28,14 @@ namespace Fluffy
         [Tooltip("The character to record. Empty uses the Fluffy Bones on this object.")]
         [SerializeField] private FluffyBones _body;
 
-        [Tooltip("Which chain to record, counting from the top of the list. -1 records " +
-                 "every chain, which for a skirt is a lot of rows.")]
-        [SerializeField] private int _chain = -1;
+        [Tooltip("Where to start recording. Empty records every bone of every chain, " +
+                 "which for a skirt is hundreds of rows a second.")]
+        [SerializeField] private Transform _startBone;
 
-        [Tooltip("Record this bone alone. Empty records every bone of the chain above. " +
-                 "Picking one narrows a skirt from hundreds of rows a second to four.")]
-        [SerializeField] private Transform _bone;
+        [Tooltip("Where to stop, included. Empty records the start bone ALONE — not the " +
+                 "rest of the chain, which is what the same field means on Fluffy Bones. " +
+                 "One bone is what you usually want to read.")]
+        [SerializeField] private Transform _endBone;
 
         [Tooltip("Start and stop by frame number instead of by hand. The first frames of " +
                  "play are never the interesting ones — the chains are still settling and " +
@@ -59,6 +60,7 @@ namespace Fluffy
         [SerializeField] private string _folder = "FluffyDebug";
 
         private readonly List<FluffyBoneState> _states = new List<FluffyBoneState>();
+        private readonly List<Transform> _recorded = new List<Transform>();
         private readonly Dictionary<Transform, Vector3> _previousDirections = new Dictionary<Transform, Vector3>();
         private StringBuilder _rows;
         private int _firstFrame;
@@ -95,8 +97,36 @@ namespace Fluffy
                              + "headX,headY,headZ,dirX,dirY,dirZ,rootX,rootY,rootZ");
 
             _previousDirections.Clear();
+            ResolveBones();
             _frames = 0;
             _recording = true;
+        }
+
+        /// <summary>
+        /// Which bones the recording covers, worked out once when it starts.
+        /// </summary>
+        /// <remarks>
+        /// An empty end bone means the start bone alone, which is the opposite of what
+        /// the same pair means on <see cref="FluffyBones"/>, where it runs to the end of
+        /// the hierarchy. Deliberate: a chain is set up once and wants its whole length,
+        /// while a recording is read by eye afterwards and one bone is usually the point.
+        /// </remarks>
+        private void ResolveBones()
+        {
+            _recorded.Clear();
+
+            if (_startBone == null)
+            {
+                return;
+            }
+
+            if (_endBone == null)
+            {
+                _recorded.Add(_startBone);
+                return;
+            }
+
+            _recorded.AddRange(FluffyChain.CollectChain(_startBone, _endBone));
         }
 
         /// <summary>Stops the recording and writes it out.</summary>
@@ -203,11 +233,6 @@ namespace Fluffy
 
             for (int c = 0; c < chains.Count; c++)
             {
-                if (_chain >= 0 && c != _chain)
-                {
-                    continue;
-                }
-
                 _states.Clear();
                 chains[c].CaptureState(_states);
 
@@ -244,7 +269,7 @@ namespace Fluffy
 
         private bool Matches(Transform bone)
         {
-            return _bone == null || bone == _bone;
+            return _recorded.Count == 0 || _recorded.Contains(bone);
         }
 
         private void AppendRow(int chain, FluffyBoneState state, float turn, float deltaTime, Vector3 root)

@@ -212,9 +212,16 @@ frames of play are never the interesting ones, with the chains still settling an
 the editor still warming up, and picking the range beforehand beats trying to
 catch the moment with a button.
 
-**Chain** picks which chain to record, -1 meaning all of them. **Bone** narrows
-it to a single bone, chosen from the character's own bones the same way Start
-Bone is, which turns a skirt from hundreds of rows a second into four.
+**Start Bone** and **End Bone** choose what goes in the file, from the same
+dropdown of the character's own bones the chain's slots use. Leave both empty and
+every bone of every chain is recorded, which for a skirt is hundreds of rows a
+second.
+
+> **End Bone means something different here.** On Fluffy Bones, an empty Last
+> Bone runs the chain to the end of the hierarchy. On the debugger, an empty End
+> Bone records the start bone **alone**. A chain is set up once and wants its
+> whole length; a recording is read by eye afterwards, and one bone is usually
+> the point. The inspector says which you are getting under the two fields.
 
 Each row is one bone in one frame:
 

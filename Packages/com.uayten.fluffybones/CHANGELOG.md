@@ -70,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and last bones alone.
 - **Limit Size**, beside Show Limits: scales the drawn limit shapes against the
   bone's length, for when neighbouring bones' shapes run into each other.
+- **Fluffy Debugger** takes a **Start Bone** and an **End Bone** instead of a
+  chain index and a bone, both from the character's own dropdown. An empty End
+  Bone records the start bone alone, which is the opposite of what the same field
+  means on Fluffy Bones and is what a recording usually wants; the inspector
+  spells out which of the two you are getting. Its Start and Stop buttons are
+  drawn greyed outside play mode rather than replaced by a note, because a button
+  that is not there reads as a feature that is not there.
 - **Fluffy Debugger** records a frame range on its own, **From Frame** to **To
   Frame**, counted from the start of play. The opening frames are never the
   interesting ones, and choosing the window beforehand beats trying to catch the

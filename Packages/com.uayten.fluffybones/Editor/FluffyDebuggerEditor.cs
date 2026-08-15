@@ -10,13 +10,18 @@ namespace Fluffy.Editor
     [CustomEditor(typeof(FluffyDebugger))]
     public class FluffyDebuggerEditor : UnityEditor.Editor
     {
-        private static readonly GUIContent BoneLabel = new GUIContent(
-            "Bone",
-            "Record this bone alone. Empty records every bone of the chain above.");
+        private static readonly GUIContent StartBoneLabel = new GUIContent(
+            "Start Bone",
+            "Where to start recording. Empty records every bone of every chain.");
+
+        private static readonly GUIContent EndBoneLabel = new GUIContent(
+            "End Bone",
+            "Where to stop, included. Empty records the start bone alone — not the rest "
+            + "of the chain, which is what this field means on Fluffy Bones.");
 
         private SerializedProperty _body;
-        private SerializedProperty _chain;
-        private SerializedProperty _bone;
+        private SerializedProperty _startBone;
+        private SerializedProperty _endBone;
         private SerializedProperty _automatic;
         private SerializedProperty _fromFrame;
         private SerializedProperty _toFrame;
@@ -26,8 +31,8 @@ namespace Fluffy.Editor
         private void OnEnable()
         {
             _body = serializedObject.FindProperty("_body");
-            _chain = serializedObject.FindProperty("_chain");
-            _bone = serializedObject.FindProperty("_bone");
+            _startBone = serializedObject.FindProperty("_startBone");
+            _endBone = serializedObject.FindProperty("_endBone");
             _automatic = serializedObject.FindProperty("_automatic");
             _fromFrame = serializedObject.FindProperty("_fromFrame");
             _toFrame = serializedObject.FindProperty("_toFrame");
@@ -51,13 +56,12 @@ namespace Fluffy.Editor
             EditorGUILayout.PropertyField(_body, new GUIContent(
                 "Body", "The character to record. Empty uses the Fluffy Bones on this object."));
 
-            EditorGUILayout.PropertyField(_chain, new GUIContent(
-                "Chain", "Which chain to record. -1 records every chain, which for a skirt "
-                         + "is a lot of rows."));
-
             // The same picker the chain's own bone slots use, so it lists this
             // character's bones instead of every transform in the scene.
-            FluffyBoneField.Draw(BoneLabel, _bone, ResolveCharacter(debugger));
+            Transform character = ResolveCharacter(debugger);
+            FluffyBoneField.Draw(StartBoneLabel, _startBone, character);
+            FluffyBoneField.Draw(EndBoneLabel, _endBone, character);
+            DrawCoverage();
 
             EditorGUILayout.Space();
             DrawRange();
@@ -70,6 +74,37 @@ namespace Fluffy.Editor
             DrawButtons(debugger);
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>
+        /// What the two bone slots add up to, spelled out under them.
+        /// </summary>
+        /// <remarks>
+        /// An empty End Bone means one bone here and the whole chain on Fluffy Bones.
+        /// Two fields with the same name and different meanings need the answer written
+        /// down rather than remembered.
+        /// </remarks>
+        private void DrawCoverage()
+        {
+            var start = _startBone.objectReferenceValue as Transform;
+            var end = _endBone.objectReferenceValue as Transform;
+
+            string message;
+            if (start == null)
+            {
+                message = "Every bone of every chain.";
+            }
+            else if (end == null)
+            {
+                message = $"{start.name} alone. Set an end bone to take in the ones below it.";
+            }
+            else
+            {
+                int count = FluffyChain.CollectChain(start, end).Count;
+                message = $"{count} bone(s), {start.name} down to {end.name}.";
+            }
+
+            EditorGUILayout.LabelField(" ", message, EditorStyles.miniLabel);
         }
 
         private void DrawRange()
@@ -106,26 +141,21 @@ namespace Fluffy.Editor
 
         private void DrawButtons(FluffyDebugger debugger)
         {
-            if (!Application.isPlaying)
-            {
-                EditorGUILayout.HelpBox(
-                    "Nothing moves outside play mode, so there is nothing to record. Press "
-                    + "play, then start the recording here — or tick Automatic and let the "
-                    + "frame range do it.",
-                    MessageType.Info);
-
-                return;
-            }
+            bool playing = Application.isPlaying;
 
             EditorGUILayout.LabelField(
                 "Frame",
-                debugger.IsRecording
-                    ? $"{debugger.Frame} — recording, {debugger.RecordedFrames} frames captured"
-                    : $"{debugger.Frame} — idle");
+                !playing
+                    ? "not playing"
+                    : debugger.IsRecording
+                        ? $"{debugger.Frame} — recording, {debugger.RecordedFrames} frames captured"
+                        : $"{debugger.Frame} — idle");
 
+            // Drawn whatever the mode, greyed rather than hidden: a button that is not
+            // there reads as a feature that is not there.
             using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUI.DisabledScope(debugger.IsRecording))
+                using (new EditorGUI.DisabledScope(!playing || debugger.IsRecording))
                 {
                     if (GUILayout.Button("Start Record", GUILayout.Height(24f)))
                     {
@@ -133,13 +163,21 @@ namespace Fluffy.Editor
                     }
                 }
 
-                using (new EditorGUI.DisabledScope(!debugger.IsRecording))
+                using (new EditorGUI.DisabledScope(!playing || !debugger.IsRecording))
                 {
                     if (GUILayout.Button("Stop Record", GUILayout.Height(24f)))
                     {
                         debugger.StopRecording();
                     }
                 }
+            }
+
+            if (!playing)
+            {
+                EditorGUILayout.LabelField(
+                    " ",
+                    "Nothing moves outside play mode. Press play to record.",
+                    EditorStyles.miniLabel);
             }
 
             if (_automatic.boolValue && debugger.AutomaticDone)
