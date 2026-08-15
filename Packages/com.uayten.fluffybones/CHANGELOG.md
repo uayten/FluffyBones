@@ -31,7 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Editing Chain** dropdown picks which chain the list shows.
 - **Show Bones**: draws the chains' bones in the scene view as wireframe
   octahedra, so posing needs no separate bone renderer. Colour is configurable,
-  and the package still depends on nothing.
+  and the package still depends on nothing. **Show Axes** draws each bone's local
+  axes alongside them.
+- **Tip Bone Length** on the chain, with an Auto toggle. A game engine bone is a
+  single point with no length of its own, so the end of a chain needs a tip
+  invented for it; Auto measures one from the rig, and turning it off sets the
+  length by hand. The invented tip draws faded.
 
 ### Changed in this release
 

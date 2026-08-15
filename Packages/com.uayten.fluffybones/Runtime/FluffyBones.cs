@@ -59,6 +59,10 @@ namespace Fluffy
         [Tooltip("Colour of the drawn bones.")]
         [SerializeField] private Color _boneColor = new Color(1f, 0.55f, 0.8f);
 
+        [Tooltip("Draw each bone's local axes — X red, Y green, Z blue. Which way they " +
+                 "point decides how the bone swings.")]
+        [SerializeField] private bool _showAxes;
+
         private Vector3 _lastPosition;
 
 #if UNITY_EDITOR
@@ -301,16 +305,19 @@ namespace Fluffy
 
         private void OnDrawGizmos()
         {
-            if (!_showBones)
-            {
-                return;
-            }
-
             Gizmos.color = _boneColor;
 
             for (int i = 0; i < _chains.Count; i++)
             {
-                _chains[i].DrawBoneGizmos();
+                if (_showBones)
+                {
+                    _chains[i].DrawBoneGizmos();
+                }
+
+                if (_showAxes)
+                {
+                    _chains[i].DrawAxisGizmos();
+                }
             }
         }
 

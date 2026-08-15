@@ -29,6 +29,16 @@ namespace Fluffy
                  "the end of the hierarchy.")]
         [SerializeField] private Transform _lastBone;
 
+        [Tooltip("Work out the tip bone's length instead of setting it: the bone below " +
+                 "the chain when the rig has one, otherwise the length of the bone before it.")]
+        [SerializeField] private bool _autoTipLength = true;
+
+        [Tooltip("Length of the tip bone, in world units. A bone in a game engine is a " +
+                 "single point, so the last one has no length of its own — this stands in " +
+                 "for the head-to-tail a bone has in Blender.")]
+        [Min(0f)]
+        [SerializeField] private float _tipLength = 0.1f;
+
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
 
@@ -233,11 +243,55 @@ namespace Fluffy
                 return;
             }
 
+            Color color = Gizmos.color;
             List<Transform> bones = CollectChain(_startBone, _lastBone);
-            for (int i = 0; i < bones.Count - 1; i++)
+
+            for (int i = 0; i < bones.Count; i++)
             {
-                DrawBone(bones[i].position, bones[i + 1].position);
+                // The invented tip is drawn faded, so it reads as a stand-in rather than
+                // a bone the rig actually has.
+                Gizmos.color = HasVirtualTip(bones, i) ? new Color(color.r, color.g, color.b, color.a * 0.45f) : color;
+                DrawBone(bones[i].position, ResolveTip(bones, i));
             }
+
+            Gizmos.color = color;
+        }
+
+        /// <summary>
+        /// Draws each bone's local axes — X red, Y green, Z blue. Which way a bone's
+        /// axes point decides how it swings, and a rig that was exported with an
+        /// unexpected orientation is invisible until you look at them.
+        /// </summary>
+        public void DrawAxisGizmos()
+        {
+            if (_startBone == null)
+            {
+                return;
+            }
+
+            Color color = Gizmos.color;
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                Transform bone = bones[i];
+                float size = Vector3.Distance(bone.position, ResolveTip(bones, i)) * 0.3f;
+                if (size < MinBoneLength)
+                {
+                    continue;
+                }
+
+                Gizmos.color = Color.red;
+                Gizmos.DrawLine(bone.position, bone.position + bone.right * size);
+
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(bone.position, bone.position + bone.up * size);
+
+                Gizmos.color = Color.blue;
+                Gizmos.DrawLine(bone.position, bone.position + bone.forward * size);
+            }
+
+            Gizmos.color = color;
         }
 
         private static void DrawBone(Vector3 head, Vector3 tip)
@@ -414,16 +468,26 @@ namespace Fluffy
 
         /// <summary>
         /// Where the bone at <paramref name="index"/> points. Every bone aims at the next
-        /// one in the chain; the final bone aims at whatever the rig has past it, or, when
-        /// it is a real leaf, at a virtual point one bone-length further on so it still swings.
+        /// one in the chain; the last one has no next bone, so it aims at a tip that is
+        /// either measured from the rig or set by hand.
         /// </summary>
-        private static Vector3 ResolveTip(List<Transform> bones, int index)
+        /// <remarks>
+        /// A bone in a game engine is a single point with a rotation — it has no length of
+        /// its own, unlike Blender's head-to-tail. The end of the chain therefore needs a
+        /// tip invented for it, or it has no direction to rotate towards.
+        /// </remarks>
+        private Vector3 ResolveTip(List<Transform> bones, int index)
         {
             Transform bone = bones[index];
 
             if (index < bones.Count - 1)
             {
                 return bones[index + 1].position;
+            }
+
+            if (!_autoTipLength)
+            {
+                return bone.position + TipDirection(bones, index) * _tipLength;
             }
 
             if (bone.childCount > 0)
@@ -434,6 +498,27 @@ namespace Fluffy
             }
 
             return bone.position + (bone.position - bones[index - 1].position);
+        }
+
+        /// <summary>
+        /// Which way the invented tip points: along the rig when there is a bone below,
+        /// otherwise carrying on from the bone before it.
+        /// </summary>
+        private static Vector3 TipDirection(List<Transform> bones, int index)
+        {
+            Transform bone = bones[index];
+
+            Vector3 direction = bone.childCount > 0
+                ? bone.GetChild(0).position - bone.position
+                : bone.position - bones[index - 1].position;
+
+            return direction.sqrMagnitude < MinBoneLength ? bone.forward : direction.normalized;
+        }
+
+        /// <summary>Whether the bone at <paramref name="index"/> ends in an invented tip.</summary>
+        private bool HasVirtualTip(List<Transform> bones, int index)
+        {
+            return index == bones.Count - 1 && (!_autoTipLength || bones[index].childCount == 0);
         }
 
         /// <summary>Per-bone simulation state, cached at build time.</summary>

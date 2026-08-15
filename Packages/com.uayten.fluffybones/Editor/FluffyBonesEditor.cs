@@ -21,6 +21,7 @@ namespace Fluffy.Editor
         private SerializedProperty _detectionKeywords;
         private SerializedProperty _teleportThreshold;
         private SerializedProperty _showBones;
+        private SerializedProperty _showAxes;
         private SerializedProperty _boneColor;
 
         private UnityEditor.Editor _profileEditor;
@@ -35,6 +36,7 @@ namespace Fluffy.Editor
             _detectionKeywords = serializedObject.FindProperty("_detectionKeywords");
             _teleportThreshold = serializedObject.FindProperty("_teleportThreshold");
             _showBones = serializedObject.FindProperty("_showBones");
+            _showAxes = serializedObject.FindProperty("_showAxes");
             _boneColor = serializedObject.FindProperty("_boneColor");
         }
 
@@ -123,6 +125,8 @@ namespace Fluffy.Editor
                                             + "Leave empty to run to the end of the hierarchy."),
                 chain.FindPropertyRelative("_lastBone"),
                 character);
+
+            FluffyChainDrawer.DrawTipBone(EditorGUILayout.GetControlRect(), chain);
         }
 
         private void DrawMultipleChains()
@@ -147,7 +151,9 @@ namespace Fluffy.Editor
             EditorGUILayout.LabelField("Default Pose", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_showBones, new GUIContent("Show Bones"));
 
-            if (_showBones.boolValue)
+            EditorGUILayout.PropertyField(_showAxes, new GUIContent("Show Axes"));
+
+            if (_showBones.boolValue || _showAxes.boolValue)
             {
                 EditorGUILayout.PropertyField(_boneColor, new GUIContent("Bone Colour"));
             }

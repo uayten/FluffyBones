@@ -86,7 +86,25 @@ characters sharing one mesh can rest differently.
 **Show Bones** draws the chain's bones in the scene view as wireframe octahedra,
 the shape a skeleton is normally drawn with. It is there so posing does not need
 a separate bone renderer component — Fluffy Bones has no dependency on Animation
-Rigging or anything else.
+Rigging or anything else. **Show Axes** adds each bone's local axes, X red, Y
+green, Z blue.
+
+## The tip bone
+
+A bone in Blender runs from a head to a tail and has a length. In a game engine
+it is a single point with a rotation — the length you see is only the gap to the
+next bone, so the last bone of a chain has none at all, and nothing to swing
+towards.
+
+Fluffy Bones invents a tip for it. **Auto** measures it: the bone below the chain
+when the rig has one, otherwise the length of the bone before it. Turn Auto off
+to set **Tip Bone Length** by hand — a longer tip makes the end of the chain
+swing wider and slower. The invented tip is drawn faded, so it never reads as a
+bone the rig actually has.
+
+It sits on the chain rather than on the profile on purpose: a profile is feel and
+gets shared between a tail and a skirt, while a tip length is geometry and
+belongs to one rig.
 
 ## Contents
 
