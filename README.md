@@ -24,10 +24,11 @@ inteiro.
 3. Na primeira abertura a Unity gera `Library/`, `ProjectSettings/` restantes e
    os `.meta` — tudo ignorado ou commitado conforme o `.gitignore`.
 
-> **Compatibilidade:** o `package.json` declara `"unity": "2022.3"` como mínimo,
-> mas o desenvolvimento acontece em 6000.4. Esse campo é só uma declaração — não
-> impede o compilador de aceitar API que só existe em Unity 6. Antes de publicar,
-> abrir o package num projeto 2022.3 vazio e confirmar que compila.
+> **Compatibilidade:** o mínimo suportado é **Unity 6** — `"unity": "6000.0"` no
+> `package.json`. Nada anterior à Unity 6 recebe suporte. O desenvolvimento
+> acontece em 6000.4, uma minor acima do mínimo declarado; o campo é só uma
+> declaração e não impede o compilador de aceitar API introduzida depois da
+> 6000.0, então vale uma passada num projeto 6000.0 antes de publicar.
 
 ### Testar dentro de outro projeto
 
