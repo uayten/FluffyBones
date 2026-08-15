@@ -689,12 +689,21 @@ namespace Fluffy
         public bool HasDefaultPose => PoseData != null && PoseData.Length > 0;
 
         /// <summary>What the bone at <paramref name="index"/> is allowed to do.</summary>
+        /// <remarks>
+        /// Clamped here rather than trusted: the inspector keeps 0 inside every range,
+        /// but the fields are public and a pose asset can be edited from elsewhere, and
+        /// both the solver and the gizmos come through this one call.
+        /// </remarks>
         private FluffyLimits ResolveLimits(int index)
         {
             FluffyLimits global = _pose != null ? _pose.GlobalLimits : _globalLimits;
             FluffyBonePose[] pose = PoseData;
 
-            return pose != null && index < pose.Length ? pose[index].Resolve(global) : global;
+            FluffyLimits limits = pose != null && index < pose.Length
+                ? pose[index].Resolve(global)
+                : global;
+
+            return limits.Clamped;
         }
 
         /// <summary>

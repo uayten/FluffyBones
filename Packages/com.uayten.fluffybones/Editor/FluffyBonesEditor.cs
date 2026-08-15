@@ -510,33 +510,17 @@ namespace Fluffy.Editor
 
             EditorGUI.BeginChangeCheck();
             float min = DrawAngle(minRect, "Min", style, RangeLabelWidth, value.x);
-            bool minChanged = EditorGUI.EndChangeCheck();
-
-            EditorGUI.BeginChangeCheck();
             float max = DrawAngle(maxRect, "Max", style, RangeLabelWidth, value.y);
-            bool maxChanged = EditorGUI.EndChangeCheck();
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                // The range is measured from the pose, so the minimum stops at 0 and the
+                // maximum starts there — a drag runs out of room at the pose rather than
+                // through it, and the two ends can never cross.
+                range.vector2Value = FluffyLimits.ClampRange(new Vector2(min, max));
+            }
 
             EditorGUI.indentLevel = indent;
-
-            if (!minChanged && !maxChanged)
-            {
-                return;
-            }
-
-            // A maximum below the minimum would be an arc the bone can never satisfy, so
-            // the end being edited stops against the other rather than crossing it.
-            // Swapping the two mid-drag would hand the cursor the value it was dragging
-            // away from, and the one it was dragging would be lost.
-            if (minChanged)
-            {
-                min = Mathf.Min(min, max);
-            }
-            else
-            {
-                max = Mathf.Max(min, max);
-            }
-
-            range.vector2Value = new Vector2(min, max);
         }
 
         private void DrawPoseAsset(SerializedProperty poseAsset)

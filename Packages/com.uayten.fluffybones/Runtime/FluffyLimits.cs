@@ -46,5 +46,29 @@ namespace Fluffy
 
         /// <summary>Whether every axis is unrestricted, so nothing needs clamping or drawing.</summary>
         public bool IsUnrestricted => IsFree(Twist) && IsFree(SwingY) && IsFree(SwingZ);
+
+        /// <summary>
+        /// Holds a range to one a bone can actually sit in: the minimum at or below the
+        /// pose, the maximum at or above it, both inside -180 to 180.
+        /// </summary>
+        /// <remarks>
+        /// A range is measured from the bone's pose, so 0 is where it rests. A minimum
+        /// above 0 would ask the solver to hold the bone off its own pose, which the
+        /// spring pulls it straight back to, and the rim drawn in the scene reads each
+        /// side as a distance from 0, so a positive minimum turns it inside out. Keeping
+        /// 0 inside is also what stops the two ends crossing.
+        /// </remarks>
+        public static Vector2 ClampRange(Vector2 range)
+        {
+            return new Vector2(Mathf.Clamp(range.x, -Open, 0f), Mathf.Clamp(range.y, 0f, Open));
+        }
+
+        /// <summary>Every axis held to a range the bone can sit in.</summary>
+        public FluffyLimits Clamped => new FluffyLimits
+        {
+            Twist = ClampRange(Twist),
+            SwingY = ClampRange(SwingY),
+            SwingZ = ClampRange(SwingZ)
+        };
     }
 }

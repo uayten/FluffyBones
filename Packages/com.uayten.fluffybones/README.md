@@ -4,8 +4,9 @@ Secondary motion for bone chains in Unity. Point it at a tail, a skirt, a cape,
 a chain or a lock of hair and it follows the character with springy, tunable
 physics — no rigidbodies, no joints, no physics scene setup.
 
-> **Status: early WIP.** The chain solver works. Collision, angle limits and the
-> per-character update pass are not implemented yet.
+> **Status: early WIP.** The chain solver, the angle limits and the per-character
+> update pass work. Collision is not implemented yet, and neither is the twist
+> half of the limits — see [Known limitations](#known-limitations).
 
 ## Requirements
 
@@ -108,7 +109,15 @@ minimum and a maximum on each of its own axes, in degrees. -180 to 180 leaves an
 axis free, which is the default and draws nothing.
 
 - **Y Swing** and **Z Swing** open the cone the bone moves inside.
-- **X Twist** is the roll along the bone, drawn as a circle.
+- **X Twist** is the roll along the bone, drawn as a circle. Saved and drawn, but
+  not yet enforced — see [Known limitations](#known-limitations).
+
+The angles are measured from the pose, so 0 is where the bone rests: the minimum
+cannot go above it and the maximum cannot go below it. A range that shut the pose
+out would ask for a bone held somewhere the spring pulls it straight out of.
+
+Drag sideways on **Min** or **Max** to scrub the value, the same as the rotation
+fields above. A drag stops when it reaches the pose.
 
 Each axis keeps its colour throughout — Y green, Z blue, X red — in the field
 labels and in the shapes drawn in the scene, so the arc you are looking at names
@@ -178,6 +187,9 @@ All types live in the `Fluffy` namespace.
 
 - The solver steps once per rendered frame, so behaviour changes with frame
   rate. Substepping on a fixed timestep is still to be done.
+- **X Twist** does not restrict anything yet. The solver swings the bone towards
+  its tip and never rolls it, so there is no twist to clamp; the limit is stored,
+  drawn and copied like the other two, ready for when there is.
 - Chains are collected by following the first child. Bones that branch, and
   chains defined by an explicit bone list, are not supported yet.
 

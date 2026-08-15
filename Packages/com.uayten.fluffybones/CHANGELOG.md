@@ -43,12 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A pose longer than the chain hands its first entries to the bones that exist;
   the extras show greyed, with a button to drop them and save the file.
 - **Angle Limits**: a minimum and a maximum per bone on each of its own axes. Y
-  and Z open the cone the bone swings inside, X is the twist along it. Separate
-  minimums and maximums make the cone lopsided, which is what lets a cape billow
-  far off the back and barely move the other way. Stored in the rotation asset
-  beside the pose, so both are shared and copied together.
+  and Z open the cone the bone swings inside, X is the twist along it — stored
+  and drawn, but not enforced, since the solver produces no twist to clamp yet.
+  Separate minimums and maximums make the cone lopsided, which is what lets a
+  cape billow far off the back and barely move the other way. Stored in the
+  rotation asset beside the pose, so both are shared and copied together.
 - Limits are set globally per chain and every bone follows them, until a bone
   ticks **Override** and carries its own. **Reset to global** puts it back.
+- The limit fields scrub by dragging, like the rotation fields. One label sits
+  over two numbers there, so the axis letter cannot be the handle the way it is
+  for a rotation: **Min** and **Max** are the handles, tinted the axis colour.
+- `FluffyLimits.ClampRange` keeps the pose inside every range — the minimum at or
+  below 0, the maximum at or above it. A range that shut the pose out asked for a
+  bone held where the spring pulls it straight out of, and drew a rim turned
+  inside out. Applied in the inspector and again on the way to the solver, since
+  the fields are public and a pose asset can be edited from elsewhere.
 - **Show Limits**: draws them from each bone's head, each axis in its own colour
   — a green arc for Y, a blue one for Z, the rim they make together, and a red
   circle for the twist. The field labels carry the same colours.
