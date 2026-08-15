@@ -70,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and last bones alone.
 - **Limit Size**, beside Show Limits: scales the drawn limit shapes against the
   bone's length, for when neighbouring bones' shapes run into each other.
+- **Fluffy Debugger** records a frame range on its own, **From Frame** to **To
+  Frame**, counted from the start of play. The opening frames are never the
+  interesting ones, and choosing the window beforehand beats trying to catch the
+  moment with a button. Starting and stopping by hand are buttons rather than a
+  tick box, and the bone to record is picked from the character's own bones the
+  way Start Bone is, instead of typed as a name to match.
 - **Fluffy Debugger**, a component that records what the chains did frame by
   frame to a CSV: how far each bone turned, how long the frame it turned in was,
   where it sits in the frame the limits are measured in, and whether it is pinned

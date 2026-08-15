@@ -32,16 +32,25 @@ namespace Fluffy
                  "every chain, which for a skirt is a lot of rows.")]
         [SerializeField] private int _chain = -1;
 
-        [Tooltip("Only bones whose name contains this are recorded. Empty records the " +
-                 "whole chain. Case is ignored.")]
-        [SerializeField] private string _boneFilter = string.Empty;
+        [Tooltip("Record this bone alone. Empty records every bone of the chain above. " +
+                 "Picking one narrows a skirt from hundreds of rows a second to four.")]
+        [SerializeField] private Transform _bone;
 
-        [Tooltip("Tick to start recording, untick to write the file out. Can be toggled " +
-                 "while playing, which is the point — catch the moment it misbehaves.")]
-        [SerializeField] private bool _record;
+        [Tooltip("Start and stop by frame number instead of by hand. The first frames of " +
+                 "play are never the interesting ones — the chains are still settling and " +
+                 "the editor is still warming up.")]
+        [SerializeField] private bool _automatic;
 
-        [Tooltip("Stops and writes itself out after this many frames, so a recording " +
-                 "left running does not eat memory.")]
+        [Tooltip("Frame to start at, counting from the moment play began.")]
+        [Min(0)]
+        [SerializeField] private int _fromFrame = 120;
+
+        [Tooltip("Frame to stop and write out at.")]
+        [Min(1)]
+        [SerializeField] private int _toFrame = 420;
+
+        [Tooltip("A recording started by hand writes itself out after this many frames, " +
+                 "so one left running does not eat memory.")]
         [Min(1)]
         [SerializeField] private int _maxFrames = 3600;
 
@@ -52,11 +61,28 @@ namespace Fluffy
         private readonly List<FluffyBoneState> _states = new List<FluffyBoneState>();
         private readonly Dictionary<Transform, Vector3> _previousDirections = new Dictionary<Transform, Vector3>();
         private StringBuilder _rows;
+        private int _firstFrame;
         private int _frames;
         private bool _recording;
+        private bool _automaticDone;
+
+        /// <summary>The character being recorded.</summary>
+        public FluffyBones Body => _body;
 
         /// <summary>Whether a recording is running.</summary>
         public bool IsRecording => _recording;
+
+        /// <summary>How many frames the running recording has captured.</summary>
+        public int RecordedFrames => _frames;
+
+        /// <summary>
+        /// Frames since play began, which is what the frame range and the trace's own
+        /// frame column count in.
+        /// </summary>
+        public int Frame => Time.frameCount - _firstFrame;
+
+        /// <summary>Whether the automatic range has already been through.</summary>
+        public bool AutomaticDone => _automaticDone;
 
         /// <summary>Starts a recording, discarding anything held from a previous one.</summary>
         [ContextMenu("Start Recording")]
@@ -71,7 +97,6 @@ namespace Fluffy
             _previousDirections.Clear();
             _frames = 0;
             _recording = true;
-            _record = true;
         }
 
         /// <summary>Stops the recording and writes it out.</summary>
@@ -80,7 +105,6 @@ namespace Fluffy
         public string StopRecording()
         {
             _recording = false;
-            _record = false;
 
             if (_rows == null || _frames == 0)
             {
@@ -130,6 +154,14 @@ namespace Fluffy
             {
                 _body = GetComponent<FluffyBones>();
             }
+
+            _firstFrame = Time.frameCount;
+            _automaticDone = false;
+        }
+
+        private void OnValidate()
+        {
+            _toFrame = Mathf.Max(_toFrame, _fromFrame + 1);
         }
 
         private void OnDisable()
@@ -142,16 +174,22 @@ namespace Fluffy
 
         private void LateUpdate()
         {
-            // The tick box is the whole interface, so it has to work when it is clicked
-            // mid-play rather than only at startup.
-            if (_record && !_recording)
+            // The range is read every frame rather than armed once, so moving it while
+            // play is running takes effect on the next pass through.
+            if (_automatic && !_automaticDone)
             {
-                StartRecording();
-            }
-            else if (!_record && _recording)
-            {
-                StopRecording();
-                return;
+                int frame = Frame;
+
+                if (!_recording && frame >= _fromFrame && frame < _toFrame)
+                {
+                    StartRecording();
+                }
+                else if (_recording && frame >= _toFrame)
+                {
+                    StopRecording();
+                    _automaticDone = true;
+                    return;
+                }
             }
 
             if (!_recording || _body == null)
@@ -195,17 +233,18 @@ namespace Fluffy
 
             _frames++;
 
-            if (_frames >= _maxFrames)
+            // The automatic range has its own end; this is the guard for one started by
+            // hand and forgotten about.
+            if (!_automatic && _frames >= _maxFrames)
             {
-                Debug.Log($"[Fluffy Bones] Trace hit its {_maxFrames} frame limit.", this);
+                Debug.Log($"[Fluffy Bones] Recording hit its {_maxFrames} frame limit.", this);
                 StopRecording();
             }
         }
 
         private bool Matches(Transform bone)
         {
-            return string.IsNullOrEmpty(_boneFilter)
-                   || bone.name.IndexOf(_boneFilter, System.StringComparison.OrdinalIgnoreCase) >= 0;
+            return _bone == null || bone == _bone;
         }
 
         private void AppendRow(int chain, FluffyBoneState state, float turn, float deltaTime, Vector3 root)
@@ -214,7 +253,9 @@ namespace Fluffy
 
             // Invariant throughout: a comma for a decimal point turns a CSV into
             // nonsense, and this machine's locale uses one.
-            _rows.Append(_frames.ToString(invariant)).Append(',')
+            // Counted from the start of play, not from the start of the recording, so a
+            // row lines up with the frame range that asked for it.
+            _rows.Append(Frame.ToString(invariant)).Append(',')
                 .Append(Time.timeAsDouble.ToString("F4", invariant)).Append(',')
                 .Append(deltaTime.ToString("F5", invariant)).Append(',')
                 .Append(_body.LastStepCount.ToString(invariant)).Append(',')

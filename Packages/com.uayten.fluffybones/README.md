@@ -201,16 +201,26 @@ Something that goes wrong for three frames cannot be caught by eye, and a
 screenshot cannot tell a pop from motion that is simply fast — in a still they
 look the same. **Fluffy Debugger** writes the numbers instead.
 
-Add it beside Fluffy Bones, press play, and tick **Record**. Untick it and the
-trace is written out; the console prints the path. It also stops and writes
-itself out at **Max Frames**, so one left running does not eat memory. **Chain**
-picks which chain to record, -1 meaning all of them, and **Bone Filter** narrows
-it to bones whose name contains what you type.
+Add it beside Fluffy Bones and press play. **Start Record** and **Stop Record**
+do it by hand; the console prints the path of the file written. A recording
+started by hand stops itself at **Max Frames** so one left running does not eat
+memory.
+
+Tick **Automatic** instead and it records **From Frame** to **To Frame**,
+counting from the moment play began. That is usually what you want: the opening
+frames of play are never the interesting ones, with the chains still settling and
+the editor still warming up, and picking the range beforehand beats trying to
+catch the moment with a button.
+
+**Chain** picks which chain to record, -1 meaning all of them. **Bone** narrows
+it to a single bone, chosen from the character's own bones the same way Start
+Bone is, which turns a skirt from hundreds of rows a second into four.
 
 Each row is one bone in one frame:
 
 | Column | What it tells you |
 | --- | --- |
+| `frame` | Counted from the start of play, so it lines up with the range that asked for it. |
 | `deltaTime`, `steps` | How long the frame was and how many steps it was split into. A bone that turns a long way in a long frame was moving at its usual speed; the same turn in a sixtieth of a second is a pop. |
 | `turnDeg`, `turnDegPerSec` | How far the bone turned in the world since the last frame. Per second is the honest one to compare. |
 | `swingY`, `swingZ`, `twist` | Where the bone sits in the frame the limits are measured in — the same numbers the fields in the inspector set. |
