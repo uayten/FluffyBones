@@ -169,6 +169,7 @@ namespace Fluffy.Editor
             if (_chains.arraySize == 0)
             {
                 _chains.arraySize = 1;
+                InitialiseChain(_chains.GetArrayElementAtIndex(0));
             }
             else if (_chains.arraySize > 1)
             {
@@ -202,7 +203,13 @@ namespace Fluffy.Editor
 
         private void DrawMultipleChains()
         {
+            int before = _chains.arraySize;
             EditorGUILayout.PropertyField(_chains, new GUIContent($"Chains ({_chains.arraySize})"), true);
+
+            for (int i = before; i < _chains.arraySize; i++)
+            {
+                InitialiseChain(_chains.GetArrayElementAtIndex(i));
+            }
 
             EditorGUILayout.Space(2f);
 
@@ -212,6 +219,46 @@ namespace Fluffy.Editor
             }
 
             EditorGUILayout.PropertyField(_detectionKeywords, new GUIContent("Detection Keywords"), true);
+        }
+
+        /// <summary>
+        /// Writes into a list entry the inspector has just made what the chain's own
+        /// field initialisers would have put there.
+        /// </summary>
+        /// <remarks>
+        /// Unity builds a new array element by zeroing it, not by running the class's
+        /// initialisers, and every zero here means the opposite of the default: no dummy
+        /// bone, no automatic length, and limits of 0 to 0 on all three axes, which the
+        /// solver reads as a bone that may not leave its pose. A chain added with the
+        /// list's + button was being born frozen.
+        ///
+        /// Entries Unity filled by copying the one before them come out authored, and
+        /// are left alone — inheriting the previous strand's setup is what you want from
+        /// a + button on a skirt.
+        /// </remarks>
+        private static void InitialiseChain(SerializedProperty chain)
+        {
+            SerializedProperty limits = chain.FindPropertyRelative("_globalLimits");
+            SerializedProperty swingY = limits.FindPropertyRelative(nameof(FluffyLimits.SwingY));
+            SerializedProperty swingZ = limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ));
+            SerializedProperty twist = limits.FindPropertyRelative(nameof(FluffyLimits.Twist));
+
+            bool zeroed = swingY.vector2Value == Vector2.zero
+                          && swingZ.vector2Value == Vector2.zero
+                          && twist.vector2Value == Vector2.zero;
+
+            if (!zeroed)
+            {
+                return;
+            }
+
+            swingY.vector2Value = FluffyLimits.FreeRange;
+            swingZ.vector2Value = FluffyLimits.FreeRange;
+            twist.vector2Value = FluffyLimits.FreeRange;
+
+            chain.FindPropertyRelative("_useDummyBone").boolValue = true;
+            chain.FindPropertyRelative("_autoDummyLength").boolValue = true;
+            chain.FindPropertyRelative("_dummyLength").floatValue = FluffyChain.DefaultDummyLength;
         }
 
         private void DrawDefaultPose()

@@ -99,6 +99,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   share its name with the namespace holding it without breaking fully qualified
   references for consumers.
 
+### Fixed
+
+- A chain created by the inspector was born frozen. Unity builds a new list entry
+  by zeroing it rather than by running the class's field initialisers, and every
+  zero in a `FluffyChain` means the opposite of its default: no dummy bone, no
+  automatic length, and limits of 0 to 0 on all three axes, which the solver
+  reads as a bone that may not leave its pose. It hit the + button in Multiple
+  mode and the first chain of a brand new component alike — the bones simply
+  followed the animation and nothing swung. New entries are now filled in with
+  the defaults; entries Unity filled by copying the one before them are already
+  authored and are left alone.
+
 ## [0.0.1] - 2026-08-15
 
 ### Added

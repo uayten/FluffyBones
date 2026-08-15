@@ -32,6 +32,12 @@ namespace Fluffy
         private static readonly Color AxisYColor = new Color(0.5f, 0.86f, 0.3f);
         private static readonly Color AxisZColor = new Color(0.36f, 0.62f, 1f);
 
+        /// <summary>
+        /// The dummy bone length a new chain starts with, in world units. Public so the
+        /// inspector can put it into an entry Unity created by zeroing one.
+        /// </summary>
+        public const float DefaultDummyLength = 0.1f;
+
         [Tooltip("Where the chain starts. Everything below it comes along, following " +
                  "the first child of each bone.")]
         [SerializeField] private Transform _startBone;
@@ -53,7 +59,7 @@ namespace Fluffy
                  "single point, so the last one has no length of its own — this stands in " +
                  "for the head-to-tail a bone has in Blender.")]
         [Min(0f)]
-        [SerializeField] private float _dummyLength = 0.1f;
+        [SerializeField] private float _dummyLength = DefaultDummyLength;
 
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
