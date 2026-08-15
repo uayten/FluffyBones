@@ -32,9 +32,9 @@ namespace Fluffy
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
 
-        [Tooltip("Authored default pose: the local rotation each bone rests at, captured " +
-                 "from the scene. Empty means the pose the model was imported with.")]
-        [SerializeField] private Quaternion[] _defaultPose;
+        [Tooltip("The local rotation each bone rests at, as euler angles. Empty means " +
+                 "the pose the model was imported with.")]
+        [SerializeField] private Vector3[] _defaultPoseRotations;
 
         private readonly List<Joint> _joints = new List<Joint>();
         private bool _isBuilt;
@@ -221,6 +221,63 @@ namespace Fluffy
             }
         }
 
+        /// <summary>
+        /// Draws the chain's bones as wireframe octahedra, the shape a skeleton is
+        /// normally shown with, so the chain can be seen and posed without a separate
+        /// bone renderer component.
+        /// </summary>
+        public void DrawBoneGizmos()
+        {
+            if (_startBone == null)
+            {
+                return;
+            }
+
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            for (int i = 0; i < bones.Count - 1; i++)
+            {
+                DrawBone(bones[i].position, bones[i + 1].position);
+            }
+        }
+
+        private static void DrawBone(Vector3 head, Vector3 tip)
+        {
+            Vector3 axis = tip - head;
+            float length = axis.magnitude;
+            if (length < MinBoneLength)
+            {
+                return;
+            }
+
+            Vector3 forward = axis / length;
+            Vector3 reference = Mathf.Abs(Vector3.Dot(forward, Vector3.up)) > 0.99f ? Vector3.right : Vector3.up;
+            Vector3 side = Vector3.Cross(forward, reference).normalized;
+            Vector3 up = Vector3.Cross(side, forward);
+
+            float radius = length * 0.1f;
+            Vector3 waist = head + forward * (length * 0.15f);
+
+            Vector3 a = waist + side * radius;
+            Vector3 b = waist + up * radius;
+            Vector3 c = waist - side * radius;
+            Vector3 d = waist - up * radius;
+
+            Gizmos.DrawLine(head, a);
+            Gizmos.DrawLine(head, b);
+            Gizmos.DrawLine(head, c);
+            Gizmos.DrawLine(head, d);
+
+            Gizmos.DrawLine(a, tip);
+            Gizmos.DrawLine(b, tip);
+            Gizmos.DrawLine(c, tip);
+            Gizmos.DrawLine(d, tip);
+
+            Gizmos.DrawLine(a, b);
+            Gizmos.DrawLine(b, c);
+            Gizmos.DrawLine(c, d);
+            Gizmos.DrawLine(d, a);
+        }
+
         /// <summary>Draws the chain in the scene view. Called by the owning body.</summary>
         public void DrawGizmos()
         {
@@ -264,11 +321,11 @@ namespace Fluffy
             }
 
             List<Transform> bones = CollectChain(_startBone, _lastBone);
-            _defaultPose = new Quaternion[bones.Count];
+            _defaultPoseRotations = new Vector3[bones.Count];
 
             for (int i = 0; i < bones.Count; i++)
             {
-                _defaultPose[i] = bones[i].localRotation;
+                _defaultPoseRotations[i] = bones[i].localRotation.eulerAngles;
             }
 
             return true;
@@ -283,11 +340,11 @@ namespace Fluffy
         /// <summary>Forgets the authored pose, going back to the one the model was imported with.</summary>
         public void ClearDefaultPose()
         {
-            _defaultPose = null;
+            _defaultPoseRotations = null;
         }
 
         /// <summary>Whether this chain has an authored default pose.</summary>
-        public bool HasDefaultPose => _defaultPose != null && _defaultPose.Length > 0;
+        public bool HasDefaultPose => _defaultPoseRotations != null && _defaultPoseRotations.Length > 0;
 
         /// <summary>
         /// Puts the bones back into the authored pose. Useful in the editor after play
@@ -318,12 +375,12 @@ namespace Fluffy
         /// </summary>
         private Quaternion[] ResolveRestRotations(List<Transform> bones)
         {
-            bool poseFits = _defaultPose != null && _defaultPose.Length == bones.Count;
+            bool poseFits = _defaultPoseRotations != null && _defaultPoseRotations.Length == bones.Count;
             var rotations = new Quaternion[bones.Count];
 
             for (int i = 0; i < bones.Count; i++)
             {
-                rotations[i] = poseFits ? _defaultPose[i] : bones[i].localRotation;
+                rotations[i] = poseFits ? Quaternion.Euler(_defaultPoseRotations[i]) : bones[i].localRotation;
             }
 
             return rotations;

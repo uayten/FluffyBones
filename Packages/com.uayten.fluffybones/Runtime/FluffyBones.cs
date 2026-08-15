@@ -52,6 +52,13 @@ namespace Fluffy
         [Min(0f)]
         [SerializeField] private float _teleportThreshold = 1f;
 
+        [Tooltip("Draw the chains' bones in the scene view, so they can be seen and " +
+                 "posed without a separate bone renderer.")]
+        [SerializeField] private bool _showBones = true;
+
+        [Tooltip("Colour of the drawn bones.")]
+        [SerializeField] private Color _boneColor = new Color(1f, 0.55f, 0.8f);
+
         private Vector3 _lastPosition;
 
 #if UNITY_EDITOR
@@ -292,9 +299,24 @@ namespace Fluffy
             return false;
         }
 
+        private void OnDrawGizmos()
+        {
+            if (!_showBones)
+            {
+                return;
+            }
+
+            Gizmos.color = _boneColor;
+
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                _chains[i].DrawBoneGizmos();
+            }
+        }
+
         private void OnDrawGizmosSelected()
         {
-            Gizmos.color = new Color(1f, 0.55f, 0.8f);
+            Gizmos.color = _boneColor;
 
             for (int i = 0; i < _chains.Count; i++)
             {

@@ -20,9 +20,12 @@ namespace Fluffy.Editor
         private SerializedProperty _chains;
         private SerializedProperty _detectionKeywords;
         private SerializedProperty _teleportThreshold;
+        private SerializedProperty _showBones;
+        private SerializedProperty _boneColor;
 
         private UnityEditor.Editor _profileEditor;
         private bool _showAdvanced;
+        private int _editingChain;
 
         private void OnEnable()
         {
@@ -31,6 +34,8 @@ namespace Fluffy.Editor
             _chains = serializedObject.FindProperty("_chains");
             _detectionKeywords = serializedObject.FindProperty("_detectionKeywords");
             _teleportThreshold = serializedObject.FindProperty("_teleportThreshold");
+            _showBones = serializedObject.FindProperty("_showBones");
+            _boneColor = serializedObject.FindProperty("_boneColor");
         }
 
         private void OnDisable()
@@ -140,13 +145,17 @@ namespace Fluffy.Editor
             var body = (FluffyBones)target;
 
             EditorGUILayout.LabelField("Default Pose", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(_showBones, new GUIContent("Show Bones"));
+
+            if (_showBones.boolValue)
+            {
+                EditorGUILayout.PropertyField(_boneColor, new GUIContent("Bone Colour"));
+            }
+
             EditorGUILayout.HelpBox(
-                body.HasDefaultPose
-                    ? "The chains rest at a pose captured in this scene. Rotate the bones and "
-                      + "capture again to change it."
-                    : "The chains rest at the pose the model was imported with. To bend a tail "
-                      + "into a curve the model does not have, rotate its bones in the scene "
-                      + "and press Capture.",
+                "The rotations below are the pose the chain springs back to. Edit them here "
+                + "and the scene updates as you type, or rotate the bones in the scene and "
+                + "press Capture to read them back in.",
                 MessageType.None);
 
             using (new EditorGUILayout.HorizontalScope())
@@ -162,16 +171,91 @@ namespace Fluffy.Editor
                     {
                         ApplyDefaultPose(body);
                     }
-
-                    if (GUILayout.Button("Clear", GUILayout.Width(60f)))
-                    {
-                        Undo.RecordObject(body, "Clear Fluffy Default Pose");
-                        body.ClearDefaultPose();
-                        EditorUtility.SetDirty(body);
-                        serializedObject.Update();
-                    }
                 }
             }
+
+            DrawBoneRotations();
+        }
+
+        /// <summary>
+        /// One euler field per bone of the chain being edited. Typing in them moves the
+        /// bone in the scene straight away, which is the whole point — posing a tail by
+        /// numbers you cannot see is guesswork.
+        /// </summary>
+        private void DrawBoneRotations()
+        {
+            if (_chains.arraySize == 0)
+            {
+                return;
+            }
+
+            bool isMultiple = (FluffyChainMode)_mode.enumValueIndex == FluffyChainMode.Multiple;
+            _editingChain = isMultiple && _chains.arraySize > 1 ? DrawChainSelector() : 0;
+
+            SerializedProperty chain = _chains.GetArrayElementAtIndex(_editingChain);
+            var startBone = chain.FindPropertyRelative("_startBone").objectReferenceValue as Transform;
+            var lastBone = chain.FindPropertyRelative("_lastBone").objectReferenceValue as Transform;
+
+            if (startBone == null)
+            {
+                EditorGUILayout.HelpBox("Assign a start bone to pose this chain.", MessageType.Info);
+                return;
+            }
+
+            List<Transform> bones = FluffyChain.CollectChain(startBone, lastBone);
+            SerializedProperty pose = chain.FindPropertyRelative("_defaultPoseRotations");
+
+            // Seed from the scene the first time, and whenever the chain changes length,
+            // so the fields always show real rotations rather than zeros.
+            if (pose.arraySize != bones.Count)
+            {
+                pose.arraySize = bones.Count;
+                for (int i = 0; i < bones.Count; i++)
+                {
+                    pose.GetArrayElementAtIndex(i).vector3Value = bones[i].localRotation.eulerAngles;
+                }
+            }
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                for (int i = 0; i < bones.Count; i++)
+                {
+                    DrawBoneRotation(pose.GetArrayElementAtIndex(i), bones[i]);
+                }
+            }
+        }
+
+        private int DrawChainSelector()
+        {
+            var names = new string[_chains.arraySize];
+            for (int i = 0; i < _chains.arraySize; i++)
+            {
+                var start = _chains.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative("_startBone").objectReferenceValue as Transform;
+
+                names[i] = start != null ? start.name : $"Chain {i}";
+            }
+
+            int index = Mathf.Clamp(_editingChain, 0, _chains.arraySize - 1);
+            return EditorGUILayout.Popup(new GUIContent("Editing Chain"), index, names);
+        }
+
+        private static void DrawBoneRotation(SerializedProperty rotation, Transform bone)
+        {
+            EditorGUI.BeginChangeCheck();
+            Vector3 euler = EditorGUILayout.Vector3Field(bone.name, rotation.vector3Value);
+
+            if (!EditorGUI.EndChangeCheck())
+            {
+                return;
+            }
+
+            rotation.vector3Value = euler;
+
+            // Move the bone now rather than waiting for the next rebuild, so the scene
+            // view follows the field while it is being dragged.
+            Undo.RecordObject(bone, "Edit Fluffy Default Pose");
+            bone.localRotation = Quaternion.Euler(euler);
         }
 
         private void CaptureDefaultPose(FluffyBones body)

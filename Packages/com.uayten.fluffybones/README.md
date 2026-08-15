@@ -70,13 +70,23 @@ was imported with. When the model does not have the pose you want — a tail
 modelled straight that should curl at the end — you do not have to go back to
 Blender:
 
-1. Rotate the bones in the scene until they look right.
-2. Press **Capture from scene** under Default Pose.
+The Default Pose section lists every bone of the chain with its rotation. Type in
+those fields and the bone turns in the scene as you drag — that is the fastest
+way to dial in a curve. Or rotate the bones in the scene with the normal tools
+and press **Capture from scene** to read them back in. **Apply to scene** pushes
+the stored pose back onto the bones after play mode or an animation has moved
+them.
 
-The rotations are stored on the component, so the model file is untouched and
-two characters sharing one mesh can rest differently. **Apply to scene** puts the
-bones back into that pose after play mode or an animation has moved them, and
-**Clear** goes back to the imported pose.
+In Multiple mode an **Editing Chain** dropdown picks which chain the list is
+showing, so a skirt is posed one strand at a time.
+
+The rotations are stored on the component, so the model file is untouched and two
+characters sharing one mesh can rest differently.
+
+**Show Bones** draws the chain's bones in the scene view as wireframe octahedra,
+the shape a skeleton is normally drawn with. It is there so posing does not need
+a separate bone renderer component — Fluffy Bones has no dependency on Animation
+Rigging or anything else.
 
 ## Contents
 

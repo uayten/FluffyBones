@@ -24,10 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are refused.
 - Chain entries in Multiple mode are labelled with the bone they start on rather
   than "Element 7".
-- Authored default pose: **Capture from scene** stores the bones' rotations on
-  the component and the chains spring back to those, so a tail modelled straight
-  can rest in a curve without touching the model. **Apply to scene** and
-  **Clear** go with it.
+- Authored default pose: the component lists every bone of a chain with its
+  rotation, and editing a field turns the bone in the scene as you drag, so a
+  tail modelled straight can be curled without touching the model. **Capture
+  from scene** and **Apply to scene** move the pose in either direction, and an
+  **Editing Chain** dropdown picks which chain the list shows.
+- **Show Bones**: draws the chains' bones in the scene view as wireframe
+  octahedra, so posing needs no separate bone renderer. Colour is configurable,
+  and the package still depends on nothing.
 
 ### Changed in this release
 
