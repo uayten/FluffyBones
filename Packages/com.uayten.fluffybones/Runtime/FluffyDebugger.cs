@@ -130,13 +130,18 @@ namespace Fluffy
         [ContextMenu("Start Recording")]
         public void StartRecording()
         {
+            _previousDirections.Clear();
+            _previousLocalDirections.Clear();
+
+            // Before the preamble, not after: the preamble lists the bones it is about to
+            // record, and asking that question before the answer exists listed every bone
+            // in the chain while the rows held one.
+            ResolveBones();
+
             _rows = new StringBuilder(1 << 16);
             AppendPreamble();
             AppendHeader();
 
-            _previousDirections.Clear();
-            _previousLocalDirections.Clear();
-            ResolveBones();
             _frames = 0;
             _recording = true;
         }

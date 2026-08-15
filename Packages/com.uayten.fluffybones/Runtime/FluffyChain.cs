@@ -26,6 +26,15 @@ namespace Fluffy
         /// before this was rate-independent still behave as they were tuned.
         /// </summary>
         private const float ReferenceRate = 60f;
+
+        /// <summary>
+        /// How far the correction for an uneven step is allowed to go. Bounded because
+        /// the ratio between two frame times is unbounded — a stall after a fast frame
+        /// would otherwise multiply a bone's speed by however many times longer it was,
+        /// and one wild frame is not worth trusting that far.
+        /// </summary>
+        private const float MinStepRatio = 0.25f;
+        private const float MaxStepRatio = 4f;
         private const float MinBoneLength = 1e-5f;
         private const float DegreesPerSegment = 7.5f;
         private const int MinSegments = 6;
@@ -91,6 +100,7 @@ namespace Fluffy
 
         private readonly List<Joint> _joints = new List<Joint>();
         private bool _isBuilt;
+        private float _previousStep;
 
         /// <summary>Creates an unconfigured chain. Used by the Unity serializer.</summary>
         public FluffyChain()
@@ -202,6 +212,7 @@ namespace Fluffy
             }
 
             _isBuilt = _joints.Count > 0;
+            _previousStep = 0f;
             return _isBuilt;
         }
 
@@ -262,8 +273,11 @@ namespace Fluffy
                 Vector3 local = Quaternion.Inverse(restRotation) * direction;
                 BuildSwingFrame(boneAxis, out Vector3 towardsY, out Vector3 towardsZ);
 
-                float swingY = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsY), -1f, 1f)) * Mathf.Rad2Deg;
-                float swingZ = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsZ), -1f, 1f)) * Mathf.Rad2Deg;
+                // The same unfolding the solver clamps with, so a trace reads what the
+                // solver acted on rather than a folded copy of it.
+                bool behind = Vector3.Dot(local, boneAxis) < 0f;
+                float swingY = SwingAngle(Vector3.Dot(local, towardsY), behind);
+                float swingZ = SwingAngle(Vector3.Dot(local, towardsZ), behind);
 
                 into.Add(new FluffyBoneState
                 {
@@ -373,6 +387,20 @@ namespace Fluffy
             // wherever the spring and the head put it — against one limit or the other.
             float inertiaRetained = Mathf.Pow(1f - drag, deltaTime * ReferenceRate);
 
+            // What the solver keeps of a bone's motion is the distance it covered last
+            // step, not its speed, so replaying it over a step of a different length
+            // changes how fast the bone is travelling. Frame times in an editor swing
+            // nine to one, and every frame longer than the one before it handed the chain
+            // free speed: measured against this scene's own recorded frame times, the tail
+            // reached 90 degrees off its pose where the same average held steady kept it
+            // inside 16. Scaling by the ratio is what makes the stored distance mean the
+            // same speed in the new step.
+            float stepRatio = _previousStep > 0f
+                ? Mathf.Clamp(deltaTime / _previousStep, MinStepRatio, MaxStepRatio)
+                : 1f;
+
+            _previousStep = deltaTime;
+
             // Root first: rotating a bone moves every bone below it, so each joint has
             // to read a position its parent has already settled this step.
             for (int i = 0; i < _joints.Count; i++)
@@ -389,7 +417,7 @@ namespace Fluffy
                     ? profile.EvaluateReturnStrength(joint.NormalizedDepth)
                     : DefaultReturnStrength;
 
-                Vector3 inertia = (joint.CurrentTip - joint.PreviousTip) * inertiaRetained;
+                Vector3 inertia = (joint.CurrentTip - joint.PreviousTip) * (stepRatio * inertiaRetained);
                 Vector3 pullToRest = restDirection * (returnStrength * joint.Length * deltaTime);
 
                 Vector3 nextTip = joint.CurrentTip + inertia + pullToRest + gravityStep;
@@ -434,8 +462,9 @@ namespace Fluffy
             Vector3 local = Quaternion.Inverse(restRotation) * direction;
             BuildSwingFrame(joint.BoneAxis, out Vector3 towardsY, out Vector3 towardsZ);
 
-            float swingY = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsY), -1f, 1f)) * Mathf.Rad2Deg;
-            float swingZ = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsZ), -1f, 1f)) * Mathf.Rad2Deg;
+            bool behind = Vector3.Dot(local, joint.BoneAxis) < 0f;
+            float swingY = SwingAngle(Vector3.Dot(local, towardsY), behind);
+            float swingZ = SwingAngle(Vector3.Dot(local, towardsZ), behind);
 
             float clampedY = Mathf.Clamp(swingY, limits.SwingY.x, limits.SwingY.y);
             float clampedZ = Mathf.Clamp(swingZ, limits.SwingZ.x, limits.SwingZ.y);
@@ -446,6 +475,32 @@ namespace Fluffy
             }
 
             return restRotation * SwingToDirection(joint.BoneAxis, towardsY, towardsZ, clampedY, clampedZ);
+        }
+
+        /// <summary>
+        /// How far a direction has tipped towards one axis, over the whole half turn
+        /// rather than only the quarter an arcsine covers.
+        /// </summary>
+        /// <remarks>
+        /// An arcsine cannot tell 40 degrees from 140: both have the same sine, and the
+        /// difference is whether the bone is still pointing forwards. Left folded, a bone
+        /// swung 136 degrees off its pose read as 44 and sat comfortably inside a limit of
+        /// 25 — the limit was not holding it at all, which measuring against this scene's
+        /// own frame times caught. Whether the direction still points along the bone is
+        /// what unfolds it.
+        /// </remarks>
+        private static float SwingAngle(float sine, bool behind)
+        {
+            float angle = Mathf.Asin(Mathf.Clamp(sine, -1f, 1f)) * Mathf.Rad2Deg;
+
+            if (!behind)
+            {
+                return angle;
+            }
+
+            // Past the quarter turn the same sine means the far side: 40 becomes 140, and
+            // -40 becomes -140, so the value stays continuous as the bone swings through.
+            return angle >= 0f ? 180f - angle : -180f - angle;
         }
 
         /// <summary>
@@ -467,12 +522,23 @@ namespace Fluffy
         }
 
         /// <summary>Rebuilds a direction from how far it tips towards each axis.</summary>
+        /// <remarks>
+        /// The angles carry which half they belong to, so the rebuild has to as well:
+        /// taking the positive root always would put a bone asked for 140 degrees at 40,
+        /// on the wrong side of the character, and reading a bone at 140 only to place it
+        /// at 40 is a snap through half a turn in one step.
+        /// </remarks>
         private static Vector3 SwingToDirection(
             Vector3 axis, Vector3 towardsY, Vector3 towardsZ, float degreesY, float degreesZ)
         {
             float y = Mathf.Sin(degreesY * Mathf.Deg2Rad);
             float z = Mathf.Sin(degreesZ * Mathf.Deg2Rad);
             float along = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y - z * z));
+
+            if (Mathf.Abs(degreesY) > 90f || Mathf.Abs(degreesZ) > 90f)
+            {
+                along = -along;
+            }
 
             return (axis * along + towardsY * y + towardsZ * z).normalized;
         }
