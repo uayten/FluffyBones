@@ -27,12 +27,16 @@ The path is relative to the consuming project's `Packages` folder.
 
 ## Getting started
 
-1. Drop **Fluffy Chain** on the first bone of a tail, a hair strand or a skirt
-   panel. The chain is collected by following the first child of each bone down
-   the hierarchy, so nothing else needs wiring.
-2. Press play and move the character. The bones lag behind and swing back.
-3. To tune it, create a profile — **Assets → Create → Fluffy Bones → Profile** —
-   and assign it. Without a profile the chain uses its built-in defaults.
+1. Add **Fluffy Body** to the character root. One component per character — not
+   one per bone.
+2. Press **Detect chains**. It scans the skeleton for bones whose names contain
+   `tail`, `skirt`, `hair`, `cape` and friends, and adds a chain for each one.
+   Bones that branch off a chain already found are skipped, so `tail_02` does
+   not start a second chain. Anything it misses, drag the root bone into the
+   list by hand.
+3. Press play and move the character. The bones lag behind and swing back.
+4. To tune it, create a profile — **Assets → Create → Fluffy Bones → Profile** —
+   and assign it on the body. A single chain can override it with one of its own.
 
 | Parameter | What it does |
 | --- | --- |
@@ -47,9 +51,9 @@ The path is relative to the consuming project's `Packages` folder.
 
 | Type | Role |
 | --- | --- |
-| `FluffyChain` | One bone chain — the component you put on a tail or a skirt strand. **Working.** |
+| `FluffyBody` | The component. Goes on the character, owns its chains and steps them. **Working.** |
+| `FluffyChain` | One bone chain, held in a list on the body. Not a component. **Working.** |
 | `FluffyProfile` | ScriptableObject with the tuning values, shareable between chains. **Working.** |
-| `FluffyBody` | Per-character root that will own and order the chain updates. *Stub.* |
 | `FluffyCollider` | Collision shape the chains are pushed out of. *Stub.* |
 
 ## Known limitations

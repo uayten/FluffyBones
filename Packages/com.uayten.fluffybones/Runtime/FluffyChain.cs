@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,114 +9,86 @@ namespace FluffyBones
     /// strand of a skirt, a lock of hair, a length of chain.
     /// </summary>
     /// <remarks>
-    /// Placed on the first bone of the chain; the remaining bones are taken from
-    /// the transform hierarchy below it, following the first child of each bone.
-    /// The solver runs in <c>LateUpdate</c>, after the Animator has written the
-    /// animated pose, and rotates each bone so its tip lags behind that pose.
+    /// Not a component: chains live in a list on the character's
+    /// <see cref="FluffyBody"/>, which owns them and steps them. The bones are
+    /// taken from the hierarchy below <see cref="RootBone"/>, following the first
+    /// child of each bone.
     /// </remarks>
-    [DisallowMultipleComponent]
-    [AddComponentMenu("Fluffy Bones/Fluffy Chain")]
-    public class FluffyChain : MonoBehaviour
+    [Serializable]
+    public class FluffyChain
     {
         private const float DefaultStiffness = 8f;
         private const float DefaultDrag = 0.15f;
         private const float MinBoneLength = 1e-5f;
 
-        [Header("Chain")]
-        [Tooltip("First bone of the chain. Defaults to this transform.")]
-        [SerializeField] private Transform _root;
+        [Tooltip("First bone of the chain. Everything below it comes along, " +
+                 "following the first child of each bone.")]
+        [SerializeField] private Transform _rootBone;
+
+        [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
+        [SerializeField] private FluffyProfile _profileOverride;
 
         [Tooltip("Virtual bone length past the last real bone, in world units, so the " +
                  "tip swings too. 0 leaves the last bone rigid.")]
         [Min(0f)]
         [SerializeField] private float _tipLength = 0.05f;
 
-        [Header("Simulation")]
-        [Tooltip("Tuning values. With none assigned the chain falls back to its defaults.")]
-        [SerializeField] private FluffyProfile _profile;
-
-        [Tooltip("How far the root may move in a single frame before the chain is " +
-                 "snapped back to its rest pose instead of swinging. Keeps teleports " +
-                 "from launching the chain across the level.")]
-        [Min(0f)]
-        [SerializeField] private float _teleportThreshold = 1f;
-
         private readonly List<Joint> _joints = new List<Joint>();
-        private Vector3 _lastRootPosition;
         private bool _isBuilt;
+
+        /// <summary>Creates an unconfigured chain. Used by the Unity serializer.</summary>
+        public FluffyChain()
+        {
+        }
+
+        /// <summary>Creates a chain rooted at <paramref name="rootBone"/>.</summary>
+        public FluffyChain(Transform rootBone)
+        {
+            _rootBone = rootBone;
+        }
+
+        /// <summary>First bone of the chain.</summary>
+        public Transform RootBone
+        {
+            get => _rootBone;
+            set => _rootBone = value;
+        }
+
+        /// <summary>Tuning for this chain alone, or null to use the body's profile.</summary>
+        public FluffyProfile ProfileOverride
+        {
+            get => _profileOverride;
+            set => _profileOverride = value;
+        }
+
+        /// <summary>Whether the chain found usable bones and is being simulated.</summary>
+        public bool IsBuilt => _isBuilt;
 
         /// <summary>Bones the chain is currently simulating, root first.</summary>
         public int JointCount => _joints.Count;
 
-        /// <summary>Tuning values in use. Assigning rebuilds nothing — it takes effect next frame.</summary>
-        public FluffyProfile Profile
-        {
-            get => _profile;
-            set => _profile = value;
-        }
-
-        private void Reset()
-        {
-            _root = transform;
-        }
-
-        private void Awake()
-        {
-            Rebuild();
-        }
-
-        private void OnEnable()
-        {
-            ResetToRestPose();
-        }
-
-        private void LateUpdate()
-        {
-            if (!_isBuilt)
-            {
-                return;
-            }
-
-            float deltaTime = Time.deltaTime;
-            if (deltaTime <= 0f)
-            {
-                return;
-            }
-
-            Vector3 rootPosition = _root.position;
-            bool teleported = _teleportThreshold > 0f
-                              && (rootPosition - _lastRootPosition).sqrMagnitude > _teleportThreshold * _teleportThreshold;
-
-            if (teleported)
-            {
-                ResetToRestPose();
-                return;
-            }
-
-            _lastRootPosition = rootPosition;
-            Simulate(deltaTime);
-        }
-
         /// <summary>
         /// Walks the hierarchy below the root, caches the rest pose and prepares the
-        /// simulation state. Call after changing the bone hierarchy at runtime.
+        /// simulation state.
         /// </summary>
-        public void Rebuild()
+        /// <param name="context">Object blamed in warnings, so clicking one selects the character.</param>
+        /// <returns>True when the chain has something to simulate.</returns>
+        public bool Build(UnityEngine.Object context = null)
         {
             _isBuilt = false;
             _joints.Clear();
 
-            if (_root == null)
+            if (_rootBone == null)
             {
-                _root = transform;
+                return false;
             }
 
-            List<Transform> bones = CollectChain(_root);
+            List<Transform> bones = CollectChain(_rootBone);
             if (bones.Count < 2)
             {
-                Debug.LogWarning($"[Fluffy Bones] '{name}' needs at least two bones in the chain — " +
-                                 "the root and one child. Nothing to simulate.", this);
-                return;
+                Debug.LogWarning($"[Fluffy Bones] Chain '{_rootBone.name}' needs at least two bones — " +
+                                 "the root and one child. Nothing to simulate.", context);
+                return false;
             }
 
             for (int i = 0; i < bones.Count; i++)
@@ -147,12 +120,12 @@ namespace FluffyBones
             }
 
             _isBuilt = _joints.Count > 0;
-            _lastRootPosition = _root.position;
+            return _isBuilt;
         }
 
         /// <summary>
-        /// Snaps every bone back to the pose it was built in and clears the accumulated
-        /// motion, so the next frame starts from rest instead of catching up.
+        /// Snaps every bone back to the pose the chain was built in and clears the
+        /// accumulated motion, so the next step starts from rest instead of catching up.
         /// </summary>
         public void ResetToRestPose()
         {
@@ -174,18 +147,25 @@ namespace FluffyBones
                 joint.CurrentTip = joint.Transform.position + joint.Transform.rotation * joint.BoneAxis * joint.Length;
                 joint.PreviousTip = joint.CurrentTip;
             }
-
-            _lastRootPosition = _root.position;
         }
 
-        private void Simulate(float deltaTime)
+        /// <summary>Advances the chain by one step.</summary>
+        /// <param name="deltaTime">Seconds since the last step.</param>
+        /// <param name="fallbackProfile">Used when the chain has no override of its own.</param>
+        public void Simulate(float deltaTime, FluffyProfile fallbackProfile)
         {
-            float drag = _profile != null ? _profile.Drag : DefaultDrag;
-            Vector3 gravityStep = (_profile != null ? _profile.Gravity : Vector3.zero) * (deltaTime * deltaTime);
+            if (!_isBuilt || deltaTime <= 0f)
+            {
+                return;
+            }
+
+            FluffyProfile profile = _profileOverride != null ? _profileOverride : fallbackProfile;
+            float drag = profile != null ? profile.Drag : DefaultDrag;
+            Vector3 gravityStep = (profile != null ? profile.Gravity : Vector3.zero) * (deltaTime * deltaTime);
             float inertiaRetained = 1f - drag;
 
             // Root first: rotating a bone moves every bone below it, so each joint has
-            // to read a position its parent has already settled this frame.
+            // to read a position its parent has already settled this step.
             for (int i = 0; i < _joints.Count; i++)
             {
                 Joint joint = _joints[i];
@@ -196,8 +176,8 @@ namespace FluffyBones
                 Quaternion restRotation = parentRotation * joint.RestLocalRotation;
                 Vector3 restDirection = restRotation * joint.BoneAxis;
 
-                float stiffness = _profile != null
-                    ? _profile.EvaluateStiffness(joint.NormalizedDepth)
+                float stiffness = profile != null
+                    ? profile.EvaluateStiffness(joint.NormalizedDepth)
                     : DefaultStiffness;
 
                 Vector3 inertia = (joint.CurrentTip - joint.PreviousTip) * inertiaRetained;
@@ -220,28 +200,9 @@ namespace FluffyBones
             }
         }
 
-        /// <summary>
-        /// Follows the first child of each bone down from <paramref name="root"/>,
-        /// which is how a tail, a hair strand or a skirt panel is normally rigged.
-        /// </summary>
-        private static List<Transform> CollectChain(Transform root)
+        /// <summary>Draws the chain in the scene view. Called by the owning body.</summary>
+        public void DrawGizmos()
         {
-            var bones = new List<Transform>();
-            Transform current = root;
-
-            while (current != null)
-            {
-                bones.Add(current);
-                current = current.childCount > 0 ? current.GetChild(0) : null;
-            }
-
-            return bones;
-        }
-
-        private void OnDrawGizmosSelected()
-        {
-            Gizmos.color = new Color(1f, 0.55f, 0.8f);
-
             if (_isBuilt)
             {
                 for (int i = 0; i < _joints.Count; i++)
@@ -254,13 +215,36 @@ namespace FluffyBones
                 return;
             }
 
-            // Not playing: preview the chain the solver would pick up.
-            List<Transform> bones = CollectChain(_root != null ? _root : transform);
+            if (_rootBone == null)
+            {
+                return;
+            }
+
+            // Not playing: preview the bones the solver would pick up.
+            List<Transform> bones = CollectChain(_rootBone);
             for (int i = 0; i < bones.Count - 1; i++)
             {
                 Gizmos.DrawLine(bones[i].position, bones[i + 1].position);
                 Gizmos.DrawWireSphere(bones[i].position, 0.01f);
             }
+        }
+
+        /// <summary>
+        /// Follows the first child of each bone down from <paramref name="root"/>, which
+        /// is how a tail, a hair strand or a skirt panel is normally rigged.
+        /// </summary>
+        public static List<Transform> CollectChain(Transform root)
+        {
+            var bones = new List<Transform>();
+            Transform current = root;
+
+            while (current != null)
+            {
+                bones.Add(current);
+                current = current.childCount > 0 ? current.GetChild(0) : null;
+            }
+
+            return bones;
         }
 
         /// <summary>Per-bone simulation state, cached at build time.</summary>
@@ -281,16 +265,15 @@ namespace FluffyBones
             /// <summary>Position along the chain: 0 at the root, 1 at the tip.</summary>
             public float NormalizedDepth;
 
-            /// <summary>World-space tip position this frame.</summary>
+            /// <summary>World-space tip position this step.</summary>
             public Vector3 CurrentTip;
 
-            /// <summary>World-space tip position last frame — the velocity comes from the difference.</summary>
+            /// <summary>World-space tip position last step — the velocity comes from the difference.</summary>
             public Vector3 PreviousTip;
         }
 
         // TODO: collision against FluffyCollider.
         // TODO: angle limits, so a skirt cannot fold through the leg.
-        // TODO: hand the update loop over to FluffyBody, for a single ordered pass
-        //       per character.
+        // TODO: chains defined by an explicit bone list, for rigs that branch.
     }
 }
