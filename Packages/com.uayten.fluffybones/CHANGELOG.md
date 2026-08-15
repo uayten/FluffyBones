@@ -101,6 +101,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Picking **Multiple** sprang straight back to Single. The Default Pose section
+  refreshed the component's own `SerializedObject` halfway through drawing the
+  inspector, which threw away everything edited above it that frame — the mode,
+  the chain list, the dummy bone toggles. Only the asset's is refreshed now, the
+  way the matching apply at the end of that method always did.
+- The twist ring said the opposite of what it meant: a full circle at 0 to 0,
+  where the bone may not roll at all, and nothing at -180 to 180, where it may
+  roll the whole way round. It now spans the range and no more.
 - A chain created by the inspector was born frozen. Unity builds a new list entry
   by zeroing it rather than by running the class's field initialisers, and every
   zero in a `FluffyChain` means the opposite of its default: no dummy bone, no

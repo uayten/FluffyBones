@@ -450,10 +450,21 @@ namespace Fluffy
             Gizmos.DrawLine(head, previous);
         }
 
+        /// <summary>
+        /// How far the bone may roll, as a ring around it that spans the range and no
+        /// more: nothing at all at 0 to 0, a full turn at -180 to 180.
+        /// </summary>
+        /// <remarks>
+        /// The ring is the range, not a dial the range is marked on. Drawing the whole
+        /// circle and putting two spokes on it said the opposite of what it meant — a
+        /// bone locked at 0 to 0 wore the biggest shape on screen, and one free to roll
+        /// all the way round wore none.
+        /// </remarks>
         private static void DrawTwistCircle(
             Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ, Vector2 range, float length)
         {
-            if (FluffyLimits.IsFree(range))
+            float sweep = range.y - range.x;
+            if (sweep <= 0f)
             {
                 return;
             }
@@ -462,26 +473,40 @@ namespace Fluffy
 
             float radius = length * TwistCircleScale;
             Vector3 centre = head + axis * (length * TwistCircleOffset);
-            Vector3 previous = centre + towardsY * radius;
 
-            for (int step = 1; step <= ConeSegments; step++)
+            // Segments in proportion to the sweep, so a narrow range is not drawn with
+            // the same twenty lines as a whole turn.
+            int segments = Mathf.Max(1, Mathf.CeilToInt(ConeSegments * (sweep / 360f)));
+            Vector3 previous = centre + TwistPoint(towardsY, towardsZ, radius, range.x);
+
+            for (int step = 1; step <= segments; step++)
             {
-                float around = step / (float)ConeSegments * Mathf.PI * 2f;
-                Vector3 point = centre + (towardsY * Mathf.Cos(around) + towardsZ * Mathf.Sin(around)) * radius;
+                float degrees = Mathf.Lerp(range.x, range.y, step / (float)segments);
+                Vector3 point = centre + TwistPoint(towardsY, towardsZ, radius, degrees);
                 Gizmos.DrawLine(previous, point);
                 previous = point;
             }
 
-            // Two spokes marking where the twist is allowed to stop.
-            DrawTwistSpoke(centre, towardsY, towardsZ, radius, range.x);
-            DrawTwistSpoke(centre, towardsY, towardsZ, radius, range.y);
+            // The ends, unless it closes on itself and they would read as a stray line
+            // across the middle.
+            if (sweep < 360f)
+            {
+                DrawTwistSpoke(centre, towardsY, towardsZ, radius, range.x);
+                DrawTwistSpoke(centre, towardsY, towardsZ, radius, range.y);
+            }
         }
 
         private static void DrawTwistSpoke(
             Vector3 centre, Vector3 towardsY, Vector3 towardsZ, float radius, float degrees)
         {
+            Gizmos.DrawLine(centre, centre + TwistPoint(towardsY, towardsZ, radius, degrees));
+        }
+
+        /// <summary>A point on the twist ring, <paramref name="degrees"/> round from Y.</summary>
+        private static Vector3 TwistPoint(Vector3 towardsY, Vector3 towardsZ, float radius, float degrees)
+        {
             float radians = degrees * Mathf.Deg2Rad;
-            Gizmos.DrawLine(centre, centre + (towardsY * Mathf.Cos(radians) + towardsZ * Mathf.Sin(radians)) * radius);
+            return (towardsY * Mathf.Cos(radians) + towardsZ * Mathf.Sin(radians)) * radius;
         }
 
         /// <summary>The bone's direction tipped <paramref name="degrees"/> towards one axis.</summary>

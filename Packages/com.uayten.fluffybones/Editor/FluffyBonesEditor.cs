@@ -330,7 +330,15 @@ namespace Fluffy.Editor
             // With an asset assigned, the rows edit the asset — which is what lets eight
             // skirt strands share one pose and be posed once.
             SerializedObject owner = ResolvePoseOwner(poseAsset, out SerializedProperty pose, chain);
-            owner.Update();
+
+            // Only the asset's. Refreshing the component's own halfway through drawing it
+            // throws away everything edited higher up the inspector this frame, which is
+            // why picking Multiple sprang back to Single: the popup wrote the new mode,
+            // and this read the old one back over it before it was ever applied.
+            if (owner != serializedObject)
+            {
+                owner.Update();
+            }
 
             SeedPose(pose, bones);
 
@@ -837,6 +845,9 @@ namespace Fluffy.Editor
 
         private void CaptureDefaultPose(FluffyBones body)
         {
+            // Anything edited earlier this pass goes in before the object is written to
+            // directly, or the Update below reads over it.
+            serializedObject.ApplyModifiedProperties();
             Undo.RecordObject(body, "Capture Fluffy Default Pose");
 
             int captured = body.CaptureDefaultPose();
@@ -965,6 +976,10 @@ namespace Fluffy.Editor
         private void DetectChains()
         {
             var body = (FluffyBones)target;
+
+            // Same as above: apply first, so switching to Multiple and pressing Detect
+            // does not lose the switch.
+            serializedObject.ApplyModifiedProperties();
             Undo.RecordObject(body, "Detect Fluffy Chains");
 
             int added = body.DetectChains();

@@ -109,8 +109,9 @@ minimum and a maximum on each of its own axes, in degrees. -180 to 180 leaves an
 axis free, which is the default and draws nothing.
 
 - **Y Swing** and **Z Swing** open the cone the bone moves inside.
-- **X Twist** is the roll along the bone, drawn as a circle. Saved and drawn, but
-  not yet enforced — see [Known limitations](#known-limitations).
+- **X Twist** is the roll along the bone, drawn as a ring around it that spans the
+  range: nothing at all at 0 to 0, a full turn at -180 to 180. Saved and drawn,
+  but not yet enforced — see [Known limitations](#known-limitations).
 
 The angles are measured from the pose, so 0 is where the bone rests: the minimum
 cannot go above it and the maximum cannot go below it. A range that shut the pose
@@ -138,9 +139,10 @@ For a skirt, tight limits on the upper bones are what keep a strand from folding
 through a leg, and there the two sides are usually equal.
 
 Tick **Show Limits** to see them. Everything starts at the bone's head: a green
-arc for the Y range, a blue arc for the Z range, and a red circle around the bone
-for the twist. Each arc is lopsided whenever a minimum and maximum differ, so a
-glance tells you which way a bone is free to go.
+arc for the Y range, a blue arc for the Z range, and a red ring around the bone
+for the twist. Every shape spans its own range and no more, so it is lopsided
+whenever a minimum and maximum differ and a glance tells you which way a bone is
+free to go. A bone free on all three axes draws nothing at all.
 
 One flat arc per axis, rather than the rim of the cone the two make together. The
 rim is the truthful shape, but a chain of them reads as a knot of ellipses, and an
