@@ -14,6 +14,15 @@ namespace Fluffy.Editor
     public class FluffyBonesEditor : UnityEditor.Editor
     {
         private const string ProfileFolderHint = "Assets";
+        private const float BoneLabelWidth = 110f;
+        private const float AxisLabelWidth = 13f;
+        private const float AxisSpacing = 4f;
+
+        // Tuned for legibility on both editor skins rather than taken from
+        // Handles.xAxisColor, whose blue is close to unreadable as small text.
+        private static readonly Color AxisXColor = new Color(0.93f, 0.44f, 0.44f);
+        private static readonly Color AxisYColor = new Color(0.55f, 0.85f, 0.36f);
+        private static readonly Color AxisZColor = new Color(0.45f, 0.68f, 1f);
 
         private SerializedProperty _mode;
         private SerializedProperty _profile;
@@ -248,10 +257,31 @@ namespace Fluffy.Editor
 
         private static void DrawBoneRotation(SerializedProperty rotation, Transform bone)
         {
-            EditorGUI.BeginChangeCheck();
-            Vector3 euler = EditorGUILayout.Vector3Field(bone.name, rotation.vector3Value);
+            Rect row = EditorGUILayout.GetControlRect();
 
-            if (!EditorGUI.EndChangeCheck())
+            float previousLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = BoneLabelWidth;
+            Rect fields = EditorGUI.PrefixLabel(row, new GUIContent(bone.name));
+            EditorGUIUtility.labelWidth = previousLabelWidth;
+
+            // PrefixLabel already applied the indent; leaving it on would shift the
+            // three fields a second time.
+            int indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+
+            float width = (fields.width - AxisSpacing * 2f) / 3f;
+            Vector3 euler = rotation.vector3Value;
+
+            EditorGUI.BeginChangeCheck();
+
+            euler.x = DrawAxis(new Rect(fields.x, fields.y, width, fields.height), "X", AxisXColor, euler.x);
+            euler.y = DrawAxis(new Rect(fields.x + width + AxisSpacing, fields.y, width, fields.height), "Y", AxisYColor, euler.y);
+            euler.z = DrawAxis(new Rect(fields.xMax - width, fields.y, width, fields.height), "Z", AxisZColor, euler.z);
+
+            bool changed = EditorGUI.EndChangeCheck();
+            EditorGUI.indentLevel = indent;
+
+            if (!changed)
             {
                 return;
             }
@@ -262,6 +292,24 @@ namespace Fluffy.Editor
             // view follows the field while it is being dragged.
             Undo.RecordObject(bone, "Edit Fluffy Default Pose");
             bone.localRotation = Quaternion.Euler(euler);
+        }
+
+        /// <summary>
+        /// One axis of a rotation, with its letter tinted to match the axis colours in
+        /// the scene view — so X in the field and the red line on the bone are read as
+        /// the same thing.
+        /// </summary>
+        private static float DrawAxis(Rect rect, string label, Color color, float value)
+        {
+            var labelRect = new Rect(rect.x, rect.y, AxisLabelWidth, rect.height);
+            var fieldRect = new Rect(rect.x + AxisLabelWidth, rect.y, rect.width - AxisLabelWidth, rect.height);
+
+            Color previous = GUI.contentColor;
+            GUI.contentColor = color;
+            EditorGUI.LabelField(labelRect, label);
+            GUI.contentColor = previous;
+
+            return EditorGUI.FloatField(fieldRect, value);
         }
 
         private void CaptureDefaultPose(FluffyBones body)
