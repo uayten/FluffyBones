@@ -70,6 +70,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and last bones alone.
 - **Limit Size**, beside Show Limits: scales the drawn limit shapes against the
   bone's length, for when neighbouring bones' shapes run into each other.
+- A trace opens with the settings it was recorded under — profile numbers,
+  teleport distance, every recorded bone with its limits, frame rate cap, time
+  scale — as comment lines. Fixed for the whole recording, so written once rather
+  than repeated on every row, and read off the objects so the file cannot
+  disagree with the run that made it.
+- `ownTurnDeg` beside `turnDeg`: how far a bone turned against its own rest frame
+  rather than in the world. A bone deep in a chain inherits most of its world
+  motion from its parents, so comparing world turn between bones says more about
+  the parents than about the bone.
+- **Fluffy Debugger** writes only the groups of columns asked for — Timing,
+  Motion, Angles, Bounds, Positions — with frame, chain and bone always there.
+  Twenty-nine columns hide the three that answer a question, and Bounds in
+  particular repeated the same limits on every row. The default is Timing, Motion
+  and Angles, twelve columns. Header and row are built from the same checks in
+  the same order, since a header that disagrees with its rows is wrong quietly.
 - **Fluffy Debugger** takes a **Start Bone** and an **End Bone** instead of a
   chain index and a bone, both from the character's own dropdown. An empty End
   Bone records the start bone alone, which is the opposite of what the same field
@@ -124,6 +139,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Damping was applied once per step, so what it meant depended on how many steps a
+  second there happened to be. A drag of 0.15 leaves 38% of a bone's speed after
+  100 ms at 60 fps, 72% at 20, and 0.9% at 292 — which a small scene in the editor
+  reaches easily. At that rate a chain arrives with no inertia left to carry it, so
+  it stops travelling through its range and starts being placed wherever the spring
+  and the head put it, against one limit or the other, which reads as a bone
+  jumping rather than swinging. It is raised to the length of the step now, so it
+  is the same at any frame rate and unchanged at 60, where every existing profile
+  was tuned.
 - A dropped frame threw the chains. The solver stepped once per rendered frame
   with whatever time had passed, and every term is proportional to it: at Unity's
   own limit for a stalled frame, a third of a second, the spring alone moved a tip

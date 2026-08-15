@@ -21,8 +21,9 @@ namespace Fluffy
         [SerializeField] private AnimationCurve _returnStrengthFalloff = AnimationCurve.Constant(0f, 1f, 1f);
 
         [Header("Damping")]
-        [Tooltip("How much motion is bled off every frame. 0 swings forever, " +
-                 "1 kills the motion instantly.")]
+        [Tooltip("How much motion is bled off every sixtieth of a second. 0 swings " +
+                 "forever, 1 kills the motion instantly. Counted in time rather than in " +
+                 "frames, so a chain settles the same at 30 fps and at 300.")]
         [Range(0f, 1f)]
         [SerializeField] private float _drag = 0.15f;
 
@@ -37,7 +38,10 @@ namespace Fluffy
         /// <summary>Return strength multiplier along the chain, from start (0) to end (1).</summary>
         public AnimationCurve ReturnStrengthFalloff => _returnStrengthFalloff;
 
-        /// <summary>Fraction of the motion removed each frame, in the 0–1 range.</summary>
+        /// <summary>
+        /// Fraction of the motion removed every sixtieth of a second, in the 0–1 range.
+        /// The solver scales it to the length of the step it is taking.
+        /// </summary>
         public float Drag => _drag;
 
         /// <summary>Constant world-space acceleration applied to every bone.</summary>

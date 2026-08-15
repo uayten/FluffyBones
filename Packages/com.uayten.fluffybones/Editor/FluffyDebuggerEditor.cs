@@ -26,6 +26,7 @@ namespace Fluffy.Editor
         private SerializedProperty _fromFrame;
         private SerializedProperty _toFrame;
         private SerializedProperty _maxFrames;
+        private SerializedProperty _columns;
         private SerializedProperty _folder;
 
         private void OnEnable()
@@ -37,6 +38,7 @@ namespace Fluffy.Editor
             _fromFrame = serializedObject.FindProperty("_fromFrame");
             _toFrame = serializedObject.FindProperty("_toFrame");
             _maxFrames = serializedObject.FindProperty("_maxFrames");
+            _columns = serializedObject.FindProperty("_columns");
             _folder = serializedObject.FindProperty("_folder");
         }
 
@@ -65,6 +67,9 @@ namespace Fluffy.Editor
 
             EditorGUILayout.Space();
             DrawRange();
+
+            EditorGUILayout.Space();
+            DrawColumns();
 
             EditorGUILayout.Space();
             EditorGUILayout.PropertyField(_folder, new GUIContent("Folder"));
@@ -105,6 +110,40 @@ namespace Fluffy.Editor
             }
 
             EditorGUILayout.LabelField(" ", message, EditorStyles.miniLabel);
+        }
+
+        /// <summary>
+        /// The column groups, with what they add up to. A file is easier to read when it
+        /// carries what a question needs and nothing else.
+        /// </summary>
+        private void DrawColumns()
+        {
+            EditorGUILayout.PropertyField(_columns, new GUIContent(
+                "Columns",
+                "Which groups to write. Frame, chain and bone are always there."));
+
+            var chosen = (FluffyDebugColumns)_columns.intValue;
+            int count = 4
+                        + (Has(chosen, FluffyDebugColumns.Timing) ? 4 : 0)
+                        + (Has(chosen, FluffyDebugColumns.Motion) ? 3 : 0)
+                        + (Has(chosen, FluffyDebugColumns.Angles) ? 5 : 0)
+                        + (Has(chosen, FluffyDebugColumns.Bounds) ? 4 : 0)
+                        + (Has(chosen, FluffyDebugColumns.Positions) ? 9 : 0);
+
+            EditorGUILayout.LabelField(" ", $"{count} columns a row", EditorStyles.miniLabel);
+
+            if (Has(chosen, FluffyDebugColumns.Bounds))
+            {
+                EditorGUILayout.HelpBox(
+                    "Bounds repeat the same limits on every row. Worth having only when "
+                    + "the limits are being changed while it records.",
+                    MessageType.None);
+            }
+        }
+
+        private static bool Has(FluffyDebugColumns value, FluffyDebugColumns group)
+        {
+            return (value & group) != 0;
         }
 
         private void DrawRange()

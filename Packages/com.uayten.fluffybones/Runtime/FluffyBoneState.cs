@@ -27,6 +27,17 @@ namespace Fluffy
         /// <summary>Where the bone would point with only the animation on it.</summary>
         public Vector3 RestDirection;
 
+        /// <summary>
+        /// Where the bone points, in its own rest frame — its swing with the parent's
+        /// motion taken out.
+        /// </summary>
+        /// <remarks>
+        /// A bone deep in a chain inherits everything above it, so how far it turned in
+        /// the world says as much about its parents as about itself. This is the part
+        /// that is its own.
+        /// </remarks>
+        public Vector3 LocalDirection;
+
         /// <summary>How far it has swung towards its own Y, in degrees.</summary>
         public float SwingY;
 

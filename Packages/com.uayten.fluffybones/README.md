@@ -55,7 +55,7 @@ for a variant, edit it and every chain using it updates at once.
 | --- | --- |
 | Strength to Return to Default Pose | How hard the chain pulls back to its pose. 0 leaves it limp. |
 | Strength Falloff Along Chain | Scales that strength from start (0) to end (1). Lower at the end whips more. |
-| Damping | Motion bled off each frame. 0 swings forever, 1 kills it instantly. This is what stops wobble. |
+| Damping | Motion bled off every sixtieth of a second. 0 swings forever, 1 kills it instantly. This is what stops wobble. Counted in time, not in frames, so a chain settles the same at 30 fps and at 300. |
 | Gravity | Constant world acceleration. A light droop reads better than -9.81. |
 | Teleport Distance | How far the character may move between two frames before the chains are carried along rigidly instead of swinging, in world units. Past this there is no sensible swing to compute, so they travel with the character keeping their shape. Around a bone's length suits most rigs. |
 
@@ -223,17 +223,34 @@ second.
 > whole length; a recording is read by eye afterwards, and one bone is usually
 > the point. The inspector says which you are getting under the two fields.
 
+The file opens with the settings it was recorded under, as comment lines starting
+with `#`: the profile's numbers, the teleport distance, each recorded bone with
+its limits, the frame rate cap and the time scale. They are fixed for the whole
+recording, so they are written once instead of repeated on every row — which is
+what the limit columns used to do — and they are read off the objects, so a file
+can never disagree with the run that made it.
+
+**Columns** decides what goes in a row, in groups. Frame, chain and bone are
+always there; the rest are worth switching on for the question at hand and off
+again, because a file with twenty-nine columns hides the three that answer it.
+**Timing**, **Motion** and **Angles** together are the usual set and are the
+default. **Bounds** repeats the same limits on every row and is only worth having
+when they are being changed while it records; **Positions** is for when the
+question is where a bone is rather than what it did.
+
 Each row is one bone in one frame:
 
-| Column | What it tells you |
-| --- | --- |
-| `frame` | Counted from the start of play, so it lines up with the range that asked for it. |
-| `deltaTime`, `steps` | How long the frame was and how many steps it was split into. A bone that turns a long way in a long frame was moving at its usual speed; the same turn in a sixtieth of a second is a pop. |
-| `turnDeg`, `turnDegPerSec` | How far the bone turned in the world since the last frame. Per second is the honest one to compare. |
-| `swingY`, `swingZ`, `twist` | Where the bone sits in the frame the limits are measured in — the same numbers the fields in the inspector set. |
-| `atYLimit`, `atZLimit` | Whether it is pinned against one end of its range. |
-| `offRestDeg` | How far it is from where its pose puts it. |
-| `carried` | Whether the character moved far enough that frame for the chains to be carried rather than swung. |
+| Group | Column | What it tells you |
+| --- | --- | --- |
+| always | `frame` | Counted from the start of play, so it lines up with the range that asked for it. |
+| Timing | `deltaTime`, `steps` | How long the frame was and how many steps it was split into. A bone that turns a long way in a long frame was moving at its usual speed; the same turn in a sixtieth of a second is a pop. |
+| Timing | `carried` | Whether the character moved far enough that frame for the chains to be carried rather than swung. |
+| Motion | `turnDeg`, `turnDegPerSec` | How far the bone turned in the world since the last frame. Per second is the honest one to compare. |
+| Motion | `offRestDeg` | How far it is from where its pose puts it. |
+| Angles | `swingY`, `swingZ`, `twist` | Where the bone sits in the frame the limits are measured in — the same numbers the fields in the inspector set. |
+| Angles | `atYLimit`, `atZLimit` | Whether it is pinned against one end of its range. |
+| Bounds | `swingYMin` … | The limits themselves, the same on every row. |
+| Positions | `headX` … | Head, direction and character position, in world space. |
 
 The distinction the first two columns make is the point: turning 20 degrees in a
 frame that lasted a third of a second is slower than usual, while 20 degrees in a
@@ -282,10 +299,11 @@ All types live in the `Fluffy` namespace.
 ## Known limitations
 
 - The solver steps at about a sixtieth of a second, splitting a longer frame into
-  as many as sixteen steps. A frame longer than that — a stall of more than a
-  quarter of a second — is stepped in slightly larger pieces rather than costing
-  without bound, so behaviour still drifts a little at the very bottom of the
-  frame rate range.
+  as many as sixteen steps. Damping and the spring are both scaled to the step, so
+  a chain behaves the same across frame rates; what is left is that a stall longer
+  than a quarter of a second is stepped in slightly larger pieces rather than
+  costing without bound, and the spring is integrated straight rather than
+  exactly, so the very bottom of the frame rate range still drifts a little.
 - **X Twist** does not restrict anything yet. The solver swings the bone towards
   its tip and never rolls it, so there is no twist to clamp; the limit is stored,
   drawn and copied like the other two, ready for when there is.

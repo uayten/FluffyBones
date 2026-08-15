@@ -129,6 +129,9 @@ namespace Fluffy
         /// <summary>Chains this character simulates.</summary>
         public IReadOnlyList<FluffyChain> Chains => _chains;
 
+        /// <summary>How far the character may move between frames before being carried.</summary>
+        public float TeleportDistance => _teleportDistance;
+
         /// <summary>Seconds the last simulated frame covered.</summary>
         /// <remarks>
         /// With the two below, this is what a trace needs to tell a pop from fast

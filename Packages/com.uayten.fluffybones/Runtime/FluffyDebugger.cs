@@ -7,6 +7,39 @@ using UnityEngine;
 namespace Fluffy
 {
     /// <summary>
+    /// Groups of columns a recording can carry.
+    /// </summary>
+    /// <remarks>
+    /// Every column costs a reader's attention, and most questions need a handful. The
+    /// frame, the chain and the bone are always written, since a row without them says
+    /// nothing about what it describes.
+    /// </remarks>
+    [System.Flags]
+    public enum FluffyDebugColumns
+    {
+        /// <summary>Nothing but the frame and which bone it is.</summary>
+        None = 0,
+
+        /// <summary>How long the frame was: time, deltaTime, steps, carried.</summary>
+        Timing = 1 << 0,
+
+        /// <summary>How far the bone turned: turnDeg, turnDegPerSec, offRestDeg.</summary>
+        Motion = 1 << 1,
+
+        /// <summary>Where it sits: swingY, swingZ, twist, and whether it is pinned.</summary>
+        Angles = 1 << 2,
+
+        /// <summary>The limits themselves, which repeat unchanged on every row.</summary>
+        Bounds = 1 << 3,
+
+        /// <summary>Head, direction and character position, in world space.</summary>
+        Positions = 1 << 4,
+
+        /// <summary>What answers most questions without burying them.</summary>
+        Default = Timing | Motion | Angles
+    }
+
+    /// <summary>
     /// Records what the chains did, frame by frame, into a file that can be read away
     /// from the running game.
     /// </summary>
@@ -55,6 +88,11 @@ namespace Fluffy
         [Min(1)]
         [SerializeField] private int _maxFrames = 3600;
 
+        [Tooltip("Which groups of columns to write. Frame, chain and bone are always " +
+                 "there; everything else costs a reader's attention, and most questions " +
+                 "need a handful of columns.")]
+        [SerializeField] private FluffyDebugColumns _columns = FluffyDebugColumns.Default;
+
         [Tooltip("Folder for the files, beside the project in the editor and in the " +
                  "persistent data path in a build.")]
         [SerializeField] private string _folder = "FluffyDebug";
@@ -62,7 +100,9 @@ namespace Fluffy
         private readonly List<FluffyBoneState> _states = new List<FluffyBoneState>();
         private readonly List<Transform> _recorded = new List<Transform>();
         private readonly Dictionary<Transform, Vector3> _previousDirections = new Dictionary<Transform, Vector3>();
+        private readonly Dictionary<Transform, Vector3> _previousLocalDirections = new Dictionary<Transform, Vector3>();
         private StringBuilder _rows;
+        private int _fieldsWritten;
         private int _firstFrame;
         private int _frames;
         private bool _recording;
@@ -91,12 +131,11 @@ namespace Fluffy
         public void StartRecording()
         {
             _rows = new StringBuilder(1 << 16);
-            _rows.AppendLine("frame,time,deltaTime,steps,carried,chain,bone,boneName,"
-                             + "turnDeg,turnDegPerSec,offRestDeg,swingY,swingZ,twist,"
-                             + "swingYMin,swingYMax,swingZMin,swingZMax,atYLimit,atZLimit,"
-                             + "headX,headY,headZ,dirX,dirY,dirZ,rootX,rootY,rootZ");
+            AppendPreamble();
+            AppendHeader();
 
             _previousDirections.Clear();
+            _previousLocalDirections.Clear();
             ResolveBones();
             _frames = 0;
             _recording = true;
@@ -245,14 +284,26 @@ namespace Fluffy
                         continue;
                     }
 
+                    // Two turns, because they answer different questions: how far the bone
+                    // swung in the world, which a deep bone inherits most of from its
+                    // parents, and how far it turned against its own rest frame, which is
+                    // only its own.
                     float turn = 0f;
+                    float ownTurn = 0f;
+
                     if (_previousDirections.TryGetValue(state.Bone, out Vector3 previous))
                     {
                         turn = Vector3.Angle(previous, state.Direction);
                     }
 
+                    if (_previousLocalDirections.TryGetValue(state.Bone, out Vector3 previousLocal))
+                    {
+                        ownTurn = Vector3.Angle(previousLocal, state.LocalDirection);
+                    }
+
                     _previousDirections[state.Bone] = state.Direction;
-                    AppendRow(c, state, turn, deltaTime, root);
+                    _previousLocalDirections[state.Bone] = state.LocalDirection;
+                    AppendRow(c, state, turn, ownTurn, deltaTime, root);
                 }
             }
 
@@ -272,52 +323,241 @@ namespace Fluffy
             return _recorded.Count == 0 || _recorded.Contains(bone);
         }
 
-        private void AppendRow(int chain, FluffyBoneState state, float turn, float deltaTime, Vector3 root)
+        /// <summary>Whether a group of columns is switched on.</summary>
+        private bool Writes(FluffyDebugColumns group)
         {
-            var invariant = CultureInfo.InvariantCulture;
+            return (_columns & group) != 0;
+        }
 
-            // Invariant throughout: a comma for a decimal point turns a CSV into
-            // nonsense, and this machine's locale uses one.
-            // Counted from the start of play, not from the start of the recording, so a
-            // row lines up with the frame range that asked for it.
-            _rows.Append(Frame.ToString(invariant)).Append(',')
-                .Append(Time.timeAsDouble.ToString("F4", invariant)).Append(',')
-                .Append(deltaTime.ToString("F5", invariant)).Append(',')
-                .Append(_body.LastStepCount.ToString(invariant)).Append(',')
-                .Append(_body.CarriedLastFrame ? '1' : '0').Append(',')
-                .Append(chain.ToString(invariant)).Append(',')
-                .Append(state.Index.ToString(invariant)).Append(',')
-                .Append(state.Bone.name).Append(',')
-                .Append(turn.ToString("F3", invariant)).Append(',')
-                .Append((deltaTime > 0f ? turn / deltaTime : 0f).ToString("F1", invariant)).Append(',')
-                .Append(state.OffRest.ToString("F3", invariant)).Append(',')
-                .Append(state.SwingY.ToString("F3", invariant)).Append(',')
-                .Append(state.SwingZ.ToString("F3", invariant)).Append(',')
-                .Append(state.Twist.ToString("F3", invariant)).Append(',')
-                .Append(state.Limits.SwingY.x.ToString("F2", invariant)).Append(',')
-                .Append(state.Limits.SwingY.y.ToString("F2", invariant)).Append(',')
-                .Append(state.Limits.SwingZ.x.ToString("F2", invariant)).Append(',')
-                .Append(state.Limits.SwingZ.y.ToString("F2", invariant)).Append(',')
-                .Append(state.AtSwingYLimit ? '1' : '0').Append(',')
-                .Append(state.AtSwingZLimit ? '1' : '0').Append(',');
+        /// <summary>
+        /// The settings the recording was made under, written once at the top as comment
+        /// lines.
+        /// </summary>
+        /// <remarks>
+        /// Everything here is fixed for the whole recording, so a column would repeat it
+        /// on every row — which is what the limit bounds used to do. Read from the objects
+        /// rather than typed, so a file can never disagree with the run that produced it.
+        /// A leading # is what spreadsheets and parsers alike skip over.
+        /// </remarks>
+        private void AppendPreamble()
+        {
+            var inv = CultureInfo.InvariantCulture;
 
-            AppendVector(state.Head, invariant);
-            AppendVector(state.Direction, invariant);
-            AppendVector(root, invariant, last: true);
+            Comment($"Fluffy Bones trace  {System.DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            Comment($"unity            {Application.unityVersion}"
+                    + $"   targetFrameRate {Application.targetFrameRate}"
+                    + $"   vSync {QualitySettings.vSyncCount}"
+                    + $"   timeScale {Time.timeScale.ToString("0.##", inv)}");
+
+            if (_body == null)
+            {
+                Comment("character        none");
+                return;
+            }
+
+            Comment($"character        {_body.name}   mode {_body.Mode}   chains {_body.Chains.Count}"
+                    + $"   teleportDistance {_body.TeleportDistance.ToString("0.###", inv)}");
+
+            AppendProfileComment("profile", _body.Profile, inv);
+
+            for (int c = 0; c < _body.Chains.Count; c++)
+            {
+                FluffyChain chain = _body.Chains[c];
+
+                if (chain.ProfileOverride != null)
+                {
+                    AppendProfileComment($"chain {c} profile", chain.ProfileOverride, inv);
+                }
+
+                _states.Clear();
+                chain.CaptureState(_states);
+
+                for (int i = 0; i < _states.Count; i++)
+                {
+                    FluffyBoneState state = _states[i];
+
+                    if (!Matches(state.Bone))
+                    {
+                        continue;
+                    }
+
+                    FluffyLimits limits = state.Limits;
+                    Comment($"bone             {state.Bone.name}"
+                            + $"   length {state.Length.ToString("0.###", inv)}"
+                            + $"   swingY {Range(limits.SwingY, inv)}"
+                            + $"   swingZ {Range(limits.SwingZ, inv)}"
+                            + $"   twist {Range(limits.Twist, inv)}");
+                }
+            }
+
+            Comment($"columns          {_columns}");
+        }
+
+        private void AppendProfileComment(string label, FluffyProfile profile, CultureInfo inv)
+        {
+            if (profile == null)
+            {
+                Comment($"{label,-16} none, so the solver's own defaults are in use");
+                return;
+            }
+
+            Comment($"{label,-16} {profile.name}"
+                    + $"   returnStrength {profile.ReturnStrength.ToString("0.###", inv)}"
+                    + $"   falloff {profile.EvaluateReturnStrength(0f).ToString("0.##", inv)}"
+                    + $"..{profile.EvaluateReturnStrength(1f).ToString("0.##", inv)}"
+                    + $"   damping {profile.Drag.ToString("0.###", inv)}"
+                    + $"   gravity {profile.Gravity.ToString("0.##")}");
+        }
+
+        private static string Range(Vector2 range, CultureInfo inv)
+        {
+            return $"{range.x.ToString("0.##", inv)}..{range.y.ToString("0.##", inv)}";
+        }
+
+        private void Comment(string line)
+        {
+            _rows.Append("# ").AppendLine(line);
+        }
+
+        /// <summary>
+        /// The column names, in the order the rows are written.
+        /// </summary>
+        /// <remarks>
+        /// Header and row are built from the same checks in the same order on purpose. A
+        /// file whose header does not match its rows is worse than one with columns nobody
+        /// wanted, because it is wrong quietly.
+        /// </remarks>
+        private void AppendHeader()
+        {
+            _fieldsWritten = 0;
+
+            Field("frame");
+            Field("chain");
+            Field("bone");
+            Field("boneName");
+
+            if (Writes(FluffyDebugColumns.Timing))
+            {
+                Field("time");
+                Field("deltaTime");
+                Field("steps");
+                Field("carried");
+            }
+
+            if (Writes(FluffyDebugColumns.Motion))
+            {
+                Field("turnDeg");
+                Field("ownTurnDeg");
+                Field("turnDegPerSec");
+                Field("offRestDeg");
+            }
+
+            if (Writes(FluffyDebugColumns.Angles))
+            {
+                Field("swingY");
+                Field("swingZ");
+                Field("twist");
+                Field("atYLimit");
+                Field("atZLimit");
+            }
+
+            if (Writes(FluffyDebugColumns.Bounds))
+            {
+                Field("swingYMin");
+                Field("swingYMax");
+                Field("swingZMin");
+                Field("swingZMax");
+            }
+
+            if (Writes(FluffyDebugColumns.Positions))
+            {
+                Field("headX"); Field("headY"); Field("headZ");
+                Field("dirX"); Field("dirY"); Field("dirZ");
+                Field("rootX"); Field("rootY"); Field("rootZ");
+            }
 
             _rows.AppendLine();
         }
 
-        private void AppendVector(Vector3 value, CultureInfo invariant, bool last = false)
+        private void AppendRow(
+            int chain, FluffyBoneState state, float turn, float ownTurn, float deltaTime, Vector3 root)
         {
-            _rows.Append(value.x.ToString("F4", invariant)).Append(',')
-                .Append(value.y.ToString("F4", invariant)).Append(',')
-                .Append(value.z.ToString("F4", invariant));
+            var invariant = CultureInfo.InvariantCulture;
+            _fieldsWritten = 0;
 
-            if (!last)
+            // Counted from the start of play, not from the start of the recording, so a
+            // row lines up with the frame range that asked for it.
+            Field(Frame.ToString(invariant));
+            Field(chain.ToString(invariant));
+            Field(state.Index.ToString(invariant));
+            Field(state.Bone.name);
+
+            if (Writes(FluffyDebugColumns.Timing))
+            {
+                Field(Time.timeAsDouble.ToString("F4", invariant));
+                Field(deltaTime.ToString("F5", invariant));
+                Field(_body.LastStepCount.ToString(invariant));
+                Field(_body.CarriedLastFrame ? "1" : "0");
+            }
+
+            if (Writes(FluffyDebugColumns.Motion))
+            {
+                Field(turn.ToString("F3", invariant));
+                Field(ownTurn.ToString("F3", invariant));
+                Field((deltaTime > 0f ? turn / deltaTime : 0f).ToString("F1", invariant));
+                Field(state.OffRest.ToString("F3", invariant));
+            }
+
+            if (Writes(FluffyDebugColumns.Angles))
+            {
+                Field(state.SwingY.ToString("F3", invariant));
+                Field(state.SwingZ.ToString("F3", invariant));
+                Field(state.Twist.ToString("F3", invariant));
+                Field(state.AtSwingYLimit ? "1" : "0");
+                Field(state.AtSwingZLimit ? "1" : "0");
+            }
+
+            if (Writes(FluffyDebugColumns.Bounds))
+            {
+                Field(state.Limits.SwingY.x.ToString("F2", invariant));
+                Field(state.Limits.SwingY.y.ToString("F2", invariant));
+                Field(state.Limits.SwingZ.x.ToString("F2", invariant));
+                Field(state.Limits.SwingZ.y.ToString("F2", invariant));
+            }
+
+            if (Writes(FluffyDebugColumns.Positions))
+            {
+                AppendVector(state.Head, invariant);
+                AppendVector(state.Direction, invariant);
+                AppendVector(root, invariant);
+            }
+
+            _rows.AppendLine();
+        }
+
+        /// <summary>
+        /// One field, with the comma before it when it is not the first of its row.
+        /// </summary>
+        /// <remarks>
+        /// Invariant formatting is the caller's job throughout: a comma for a decimal
+        /// point turns a CSV into nonsense, and this machine's locale uses one.
+        /// </remarks>
+        private void Field(string value)
+        {
+            if (_fieldsWritten > 0)
             {
                 _rows.Append(',');
             }
+
+            _rows.Append(value);
+            _fieldsWritten++;
+        }
+
+        private void AppendVector(Vector3 value, CultureInfo invariant)
+        {
+            Field(value.x.ToString("F4", invariant));
+            Field(value.y.ToString("F4", invariant));
+            Field(value.z.ToString("F4", invariant));
         }
     }
 }

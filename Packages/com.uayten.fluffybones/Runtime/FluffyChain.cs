@@ -19,6 +19,13 @@ namespace Fluffy
     {
         private const float DefaultReturnStrength = 8f;
         private const float DefaultDrag = 0.15f;
+
+        /// <summary>
+        /// The frame rate a profile's damping reads as. A drag of 0.15 means "keep 85% of
+        /// the speed each sixtieth of a second" at any frame rate, so profiles tuned
+        /// before this was rate-independent still behave as they were tuned.
+        /// </summary>
+        private const float ReferenceRate = 60f;
         private const float MinBoneLength = 1e-5f;
         private const float DegreesPerSegment = 7.5f;
         private const int MinSegments = 6;
@@ -265,6 +272,7 @@ namespace Fluffy
                     Head = bone.position,
                     Direction = direction,
                     RestDirection = restRotation * boneAxis,
+                    LocalDirection = local,
                     SwingY = swingY,
                     SwingZ = swingZ,
                     Twist = TwistAngle(Quaternion.Inverse(restRotation) * bone.rotation, boneAxis),
@@ -355,7 +363,15 @@ namespace Fluffy
             FluffyProfile profile = _profileOverride != null ? _profileOverride : fallbackProfile;
             float drag = profile != null ? profile.Drag : DefaultDrag;
             Vector3 gravityStep = (profile != null ? profile.Gravity : Vector3.zero) * (deltaTime * deltaTime);
-            float inertiaRetained = 1f - drag;
+            // Damping is authored as "how much speed is left after a sixtieth of a
+            // second", so it has to be raised to however much of one this step is.
+            // Applied once per step instead, what it means depends on how many steps a
+            // second there happen to be: at 292 fps, which a small scene in the editor
+            // hits easily, a drag of 0.15 leaves 0.9% of a bone's speed after 100 ms
+            // where at 60 fps it leaves 38%. The chain arrives with no inertia left to
+            // carry it, so it stops travelling through its range and starts being placed
+            // wherever the spring and the head put it — against one limit or the other.
+            float inertiaRetained = Mathf.Pow(1f - drag, deltaTime * ReferenceRate);
 
             // Root first: rotating a bone moves every bone below it, so each joint has
             // to read a position its parent has already settled this step.
