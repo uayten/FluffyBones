@@ -102,13 +102,18 @@ namespace Fluffy.Editor
             }
 
             SerializedProperty chain = _chains.GetArrayElementAtIndex(0);
-            EditorGUILayout.PropertyField(
+            Transform character = ((FluffyBones)target).transform;
+
+            FluffyBoneField.Draw(
+                new GUIContent("Start Bone", "Where the chain starts."),
                 chain.FindPropertyRelative("_startBone"),
-                new GUIContent("Start Bone", "Where the chain starts."));
-            EditorGUILayout.PropertyField(
-                chain.FindPropertyRelative("_lastBone"),
+                character);
+
+            FluffyBoneField.Draw(
                 new GUIContent("Last Bone", "Where the chain stops, included. "
-                                            + "Leave empty to run to the end of the hierarchy."));
+                                            + "Leave empty to run to the end of the hierarchy."),
+                chain.FindPropertyRelative("_lastBone"),
+                character);
         }
 
         private void DrawMultipleChains()

@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finds tails, skirts, hair and capes by bone name and adds a chain for each.
 - Profile slot with **New** and **Duplicate**, and the profile's settings drawn
   inline in the component so chains are tuned without leaving the character.
+- Bone slots open a searchable dropdown of the character's own bones instead of
+  Unity's object picker, which lists every transform in the scene. Dragging a
+  bone in from the Hierarchy still works, and bones from outside the character
+  are refused.
+- Chain entries in Multiple mode are labelled with the bone they start on rather
+  than "Element 7".
 - `FluffyGeneric`, a profile shipped inside the package and assigned to new
   components, so a chain works before anything is configured. It is read-only
   wherever the package is installed as a package; the inspector says so and
