@@ -11,14 +11,14 @@ namespace Fluffy
     public class FluffyProfile : ScriptableObject
     {
         [Header("Spring")]
-        [Tooltip("How hard the chain pulls back to its animated pose, per second, " +
+        [Tooltip("How hard the chain pulls back to its default pose, per second, " +
                  "relative to each bone's length. 0 leaves it limp.")]
         [Min(0f)]
-        [SerializeField] private float _stiffness = 8f;
+        [SerializeField] private float _returnStrength = 8f;
 
-        [Tooltip("Scales stiffness along the chain: 0 on the horizontal axis is the " +
-                 "root, 1 is the tip. Lower values at the tip make it whip more.")]
-        [SerializeField] private AnimationCurve _stiffnessFalloff = AnimationCurve.Constant(0f, 1f, 1f);
+        [Tooltip("Scales the return strength along the chain: 0 on the horizontal axis " +
+                 "is the start, 1 is the end. Lower at the end makes it whip more.")]
+        [SerializeField] private AnimationCurve _returnStrengthFalloff = AnimationCurve.Constant(0f, 1f, 1f);
 
         [Header("Damping")]
         [Tooltip("How much motion is bled off every frame. 0 swings forever, " +
@@ -31,11 +31,11 @@ namespace Fluffy
                  "Not Physics.gravity — a light droop usually reads better than -9.81.")]
         [SerializeField] private Vector3 _gravity = new Vector3(0f, -2f, 0f);
 
-        /// <summary>How hard the chain returns to its animated pose, per second.</summary>
-        public float Stiffness => _stiffness;
+        /// <summary>How hard the chain returns to its default pose, per second.</summary>
+        public float ReturnStrength => _returnStrength;
 
-        /// <summary>Stiffness multiplier along the chain, sampled from root (0) to tip (1).</summary>
-        public AnimationCurve StiffnessFalloff => _stiffnessFalloff;
+        /// <summary>Return strength multiplier along the chain, from start (0) to end (1).</summary>
+        public AnimationCurve ReturnStrengthFalloff => _returnStrengthFalloff;
 
         /// <summary>Fraction of the motion removed each frame, in the 0–1 range.</summary>
         public float Drag => _drag;
@@ -44,18 +44,18 @@ namespace Fluffy
         public Vector3 Gravity => _gravity;
 
         /// <summary>
-        /// Samples <see cref="StiffnessFalloff"/> safely, falling back to 1 when the
-        /// curve has no keys.
+        /// Samples <see cref="ReturnStrengthFalloff"/> safely, falling back to a flat
+        /// curve when it has no keys.
         /// </summary>
-        /// <param name="normalizedDepth">0 at the root of the chain, 1 at the tip.</param>
-        public float EvaluateStiffness(float normalizedDepth)
+        /// <param name="normalizedDepth">0 at the start of the chain, 1 at the end.</param>
+        public float EvaluateReturnStrength(float normalizedDepth)
         {
-            if (_stiffnessFalloff == null || _stiffnessFalloff.length == 0)
+            if (_returnStrengthFalloff == null || _returnStrengthFalloff.length == 0)
             {
-                return _stiffness;
+                return _returnStrength;
             }
 
-            return _stiffness * _stiffnessFalloff.Evaluate(normalizedDepth);
+            return _returnStrength * _returnStrengthFalloff.Evaluate(normalizedDepth);
         }
 
         // TODO: angle and stretch limits.

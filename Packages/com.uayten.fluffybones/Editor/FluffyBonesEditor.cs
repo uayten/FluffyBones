@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -56,6 +57,9 @@ namespace Fluffy.Editor
             {
                 DrawMultipleChains();
             }
+
+            EditorGUILayout.Space();
+            DrawDefaultPose();
 
             EditorGUILayout.Space();
             DrawProfile();
@@ -129,6 +133,73 @@ namespace Fluffy.Editor
             }
 
             EditorGUILayout.PropertyField(_detectionKeywords, new GUIContent("Detection Keywords"), true);
+        }
+
+        private void DrawDefaultPose()
+        {
+            var body = (FluffyBones)target;
+
+            EditorGUILayout.LabelField("Default Pose", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                body.HasDefaultPose
+                    ? "The chains rest at a pose captured in this scene. Rotate the bones and "
+                      + "capture again to change it."
+                    : "The chains rest at the pose the model was imported with. To bend a tail "
+                      + "into a curve the model does not have, rotate its bones in the scene "
+                      + "and press Capture.",
+                MessageType.None);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Capture from scene"))
+                {
+                    CaptureDefaultPose(body);
+                }
+
+                using (new EditorGUI.DisabledScope(!body.HasDefaultPose))
+                {
+                    if (GUILayout.Button("Apply to scene"))
+                    {
+                        ApplyDefaultPose(body);
+                    }
+
+                    if (GUILayout.Button("Clear", GUILayout.Width(60f)))
+                    {
+                        Undo.RecordObject(body, "Clear Fluffy Default Pose");
+                        body.ClearDefaultPose();
+                        EditorUtility.SetDirty(body);
+                        serializedObject.Update();
+                    }
+                }
+            }
+        }
+
+        private void CaptureDefaultPose(FluffyBones body)
+        {
+            Undo.RecordObject(body, "Capture Fluffy Default Pose");
+
+            int captured = body.CaptureDefaultPose();
+            EditorUtility.SetDirty(body);
+            serializedObject.Update();
+
+            Debug.Log(captured > 0
+                    ? $"[Fluffy Bones] Captured the default pose of {captured} chain(s) on '{body.name}'."
+                    : $"[Fluffy Bones] Nothing captured on '{body.name}' — no chain has a start bone yet.",
+                body);
+        }
+
+        private static void ApplyDefaultPose(FluffyBones body)
+        {
+            List<Transform> bones = body.CollectBones();
+            if (bones.Count == 0)
+            {
+                return;
+            }
+
+            // Record the bones themselves — this moves transforms, not the component —
+            // and record them before they move.
+            Undo.RecordObjects(bones.ToArray(), "Apply Fluffy Default Pose");
+            body.ApplyDefaultPose();
         }
 
         private void DrawProfile()

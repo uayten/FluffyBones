@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc3000459966d574c9895bf38dbcb468, type: 3}
   m_Name: FluffyGeneric
   m_EditorClassIdentifier:
-  _stiffness: 8
-  _stiffnessFalloff:
+  _returnStrength: 8
+  _returnStrengthFalloff:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3

@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are refused.
 - Chain entries in Multiple mode are labelled with the bone they start on rather
   than "Element 7".
+- Authored default pose: **Capture from scene** stores the bones' rotations on
+  the component and the chains spring back to those, so a tail modelled straight
+  can rest in a curve without touching the model. **Apply to scene** and
+  **Clear** go with it.
+
+### Changed in this release
+
+- `FluffyProfile.Stiffness` is now `ReturnStrength`, shown as "Strength to
+  Return to Default Pose", and `EvaluateStiffness` is `EvaluateReturnStrength`.
+  The drag value is labelled "Damping", which is what it always was.
 - `FluffyGeneric`, a profile shipped inside the package and assigned to new
   components, so a chain works before anything is configured. It is read-only
   wherever the package is installed as a package; the inspector says so and

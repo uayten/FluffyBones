@@ -151,6 +151,79 @@ namespace Fluffy
         }
 
         /// <summary>
+        /// Records the bones' current rotations as the pose every chain rests at.
+        /// Pose the character in the scene first — bend the tail into its curve — and
+        /// the chains will spring back to that instead of to the imported pose.
+        /// </summary>
+        /// <returns>How many chains captured a pose.</returns>
+        public int CaptureDefaultPose()
+        {
+            int captured = 0;
+
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                if (_chains[i].CaptureDefaultPose())
+                {
+                    captured++;
+                }
+            }
+
+            return captured;
+        }
+
+        /// <summary>Forgets the authored pose on every chain.</summary>
+        public void ClearDefaultPose()
+        {
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                _chains[i].ClearDefaultPose();
+            }
+        }
+
+        /// <summary>Whether any chain carries an authored default pose.</summary>
+        public bool HasDefaultPose
+        {
+            get
+            {
+                for (int i = 0; i < _chains.Count; i++)
+                {
+                    if (_chains[i].HasDefaultPose)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>Puts every chain's bones back into its authored pose.</summary>
+        public void ApplyDefaultPose()
+        {
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                _chains[i].ApplyDefaultPose();
+            }
+        }
+
+        /// <summary>Every bone covered by a chain, for undo recording before a pose change.</summary>
+        public List<Transform> CollectBones()
+        {
+            var bones = new List<Transform>();
+
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                List<Transform> chainBones = _chains[i].GetBones();
+                if (chainBones != null)
+                {
+                    bones.AddRange(chainBones);
+                }
+            }
+
+            return bones;
+        }
+
+        /// <summary>
         /// Scans the skeleton for bones whose name matches one of the detection
         /// keywords and adds a chain for each one found, skipping bones already
         /// covered by an existing chain.

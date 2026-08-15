@@ -52,11 +52,31 @@ for a variant, edit it and every chain using it updates at once.
 
 | Parameter | What it does |
 | --- | --- |
-| Stiffness | How hard the chain returns to the animated pose. 0 leaves it limp. |
-| Stiffness Falloff | Scales stiffness from start (0) to end (1). Lower at the end whips more. |
-| Drag | Motion bled off each frame. 0 swings forever, 1 kills it instantly. |
+| Strength to Return to Default Pose | How hard the chain pulls back to its pose. 0 leaves it limp. |
+| Strength Falloff Along Chain | Scales that strength from start (0) to end (1). Lower at the end whips more. |
+| Damping | Motion bled off each frame. 0 swings forever, 1 kills it instantly. This is what stops wobble. |
 | Gravity | Constant world acceleration. A light droop reads better than -9.81. |
 | Teleport Threshold | Character movement in one frame that snaps the chains back to rest. |
+
+The two spring values are easy to mix up. **Strength** decides *where* the chain
+wants to be; **damping** decides *how fast it stops moving*. Wobble that will not
+settle is a damping problem — raising the strength makes it worse, because a
+stronger spring oscillates faster.
+
+## Default pose
+
+The chains spring back to a pose, and by default that pose is the one the model
+was imported with. When the model does not have the pose you want — a tail
+modelled straight that should curl at the end — you do not have to go back to
+Blender:
+
+1. Rotate the bones in the scene until they look right.
+2. Press **Capture from scene** under Default Pose.
+
+The rotations are stored on the component, so the model file is untouched and
+two characters sharing one mesh can rest differently. **Apply to scene** puts the
+bones back into that pose after play mode or an animation has moved them, and
+**Clear** goes back to the imported pose.
 
 ## Contents
 

@@ -17,7 +17,7 @@ namespace Fluffy
     [Serializable]
     public class FluffyChain
     {
-        private const float DefaultStiffness = 8f;
+        private const float DefaultReturnStrength = 8f;
         private const float DefaultDrag = 0.15f;
         private const float MinBoneLength = 1e-5f;
 
@@ -31,6 +31,10 @@ namespace Fluffy
 
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
+
+        [Tooltip("Authored default pose: the local rotation each bone rests at, captured " +
+                 "from the scene. Empty means the pose the model was imported with.")]
+        [SerializeField] private Quaternion[] _defaultPose;
 
         private readonly List<Joint> _joints = new List<Joint>();
         private bool _isBuilt;
@@ -103,6 +107,15 @@ namespace Fluffy
                                  "hierarchy, so the chain runs to the end instead of stopping there.", context);
             }
 
+            // Pose the bones before measuring them: lengths and directions have to be
+            // read off the pose the chain will rest at, not off whatever the animator
+            // happens to be showing right now.
+            Quaternion[] restRotations = ResolveRestRotations(bones);
+            for (int i = 0; i < bones.Count; i++)
+            {
+                bones[i].localRotation = restRotations[i];
+            }
+
             for (int i = 0; i < bones.Count; i++)
             {
                 Transform bone = bones[i];
@@ -118,7 +131,7 @@ namespace Fluffy
                 _joints.Add(new Joint
                 {
                     Transform = bone,
-                    RestLocalRotation = bone.localRotation,
+                    RestLocalRotation = restRotations[i],
                     BoneAxis = Quaternion.Inverse(bone.rotation) * ((tip - bone.position) / length),
                     Length = length,
                     NormalizedDepth = i / (float)(bones.Count - 1),
@@ -184,12 +197,12 @@ namespace Fluffy
                 Quaternion restRotation = parentRotation * joint.RestLocalRotation;
                 Vector3 restDirection = restRotation * joint.BoneAxis;
 
-                float stiffness = profile != null
-                    ? profile.EvaluateStiffness(joint.NormalizedDepth)
-                    : DefaultStiffness;
+                float returnStrength = profile != null
+                    ? profile.EvaluateReturnStrength(joint.NormalizedDepth)
+                    : DefaultReturnStrength;
 
                 Vector3 inertia = (joint.CurrentTip - joint.PreviousTip) * inertiaRetained;
-                Vector3 pullToRest = restDirection * (stiffness * joint.Length * deltaTime);
+                Vector3 pullToRest = restDirection * (returnStrength * joint.Length * deltaTime);
 
                 Vector3 nextTip = joint.CurrentTip + inertia + pullToRest + gravityStep;
 
@@ -235,6 +248,85 @@ namespace Fluffy
                 Gizmos.DrawLine(bones[i].position, bones[i + 1].position);
                 Gizmos.DrawWireSphere(bones[i].position, 0.01f);
             }
+        }
+
+        /// <summary>
+        /// Records the bones' current local rotations as the pose the chain rests at.
+        /// Rotate the bones in the scene until the tail curves the way it should, then
+        /// call this — the model keeps whatever it was exported with.
+        /// </summary>
+        /// <returns>True when a pose was captured.</returns>
+        public bool CaptureDefaultPose()
+        {
+            if (_startBone == null)
+            {
+                return false;
+            }
+
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            _defaultPose = new Quaternion[bones.Count];
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                _defaultPose[i] = bones[i].localRotation;
+            }
+
+            return true;
+        }
+
+        /// <summary>The bones this chain covers, root first, or null without a start bone.</summary>
+        public List<Transform> GetBones()
+        {
+            return _startBone == null ? null : CollectChain(_startBone, _lastBone);
+        }
+
+        /// <summary>Forgets the authored pose, going back to the one the model was imported with.</summary>
+        public void ClearDefaultPose()
+        {
+            _defaultPose = null;
+        }
+
+        /// <summary>Whether this chain has an authored default pose.</summary>
+        public bool HasDefaultPose => _defaultPose != null && _defaultPose.Length > 0;
+
+        /// <summary>
+        /// Puts the bones back into the authored pose. Useful in the editor after play
+        /// mode or an animation has moved them, so the pose can be adjusted further.
+        /// </summary>
+        /// <returns>The bones that were moved, for undo recording.</returns>
+        public List<Transform> ApplyDefaultPose()
+        {
+            if (_startBone == null)
+            {
+                return null;
+            }
+
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            Quaternion[] restRotations = ResolveRestRotations(bones);
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                bones[i].localRotation = restRotations[i];
+            }
+
+            return bones;
+        }
+
+        /// <summary>
+        /// The local rotation each bone rests at: the authored pose when there is one
+        /// that still matches the chain, and the bones' current rotations otherwise.
+        /// </summary>
+        private Quaternion[] ResolveRestRotations(List<Transform> bones)
+        {
+            bool poseFits = _defaultPose != null && _defaultPose.Length == bones.Count;
+            var rotations = new Quaternion[bones.Count];
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                rotations[i] = poseFits ? _defaultPose[i] : bones[i].localRotation;
+            }
+
+            return rotations;
         }
 
         /// <summary>
