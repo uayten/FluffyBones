@@ -4,8 +4,8 @@ Secondary motion for bone chains in Unity. Point it at a tail, a skirt, a cape,
 a chain or a lock of hair and it follows the character with springy, tunable
 physics — no rigidbodies, no joints, no physics scene setup.
 
-> **Status: early WIP.** This version is scaffolding only. There is no solver
-> yet — the classes below are empty stubs.
+> **Status: early WIP.** The chain solver works. Collision, angle limits and the
+> per-character update pass are not implemented yet.
 
 ## Requirements
 
@@ -25,14 +25,39 @@ project's `Packages/manifest.json`:
 
 The path is relative to the consuming project's `Packages` folder.
 
+## Getting started
+
+1. Drop **Fluffy Chain** on the first bone of a tail, a hair strand or a skirt
+   panel. The chain is collected by following the first child of each bone down
+   the hierarchy, so nothing else needs wiring.
+2. Press play and move the character. The bones lag behind and swing back.
+3. To tune it, create a profile — **Assets → Create → Fluffy Bones → Profile** —
+   and assign it. Without a profile the chain uses its built-in defaults.
+
+| Parameter | What it does |
+| --- | --- |
+| Stiffness | How hard the chain returns to the animated pose. 0 leaves it limp. |
+| Stiffness Falloff | Scales stiffness from root (0) to tip (1). Lower at the tip whips more. |
+| Drag | Motion bled off each frame. 0 swings forever, 1 kills it instantly. |
+| Gravity | Constant world acceleration. A light droop reads better than -9.81. |
+| Tip Length | Virtual bone past the last real one, so the tip swings too. |
+| Teleport Threshold | Root movement in one frame that snaps the chain back to rest. |
+
 ## Contents
 
 | Type | Role |
 | --- | --- |
-| `FluffyBody` | Per-character root that owns and updates the chains. |
-| `FluffyChain` | One bone chain — the component you put on a tail or a skirt strand. |
-| `FluffyCollider` | Collision shape the chains are pushed out of. |
-| `FluffyProfile` | ScriptableObject with the tuning values, shareable between chains. |
+| `FluffyChain` | One bone chain — the component you put on a tail or a skirt strand. **Working.** |
+| `FluffyProfile` | ScriptableObject with the tuning values, shareable between chains. **Working.** |
+| `FluffyBody` | Per-character root that will own and order the chain updates. *Stub.* |
+| `FluffyCollider` | Collision shape the chains are pushed out of. *Stub.* |
+
+## Known limitations
+
+- The solver steps once per rendered frame, so behaviour changes with frame
+  rate. Substepping on a fixed timestep is still to be done.
+- Chains are collected by following the first child. Bones that branch, and
+  chains defined by an explicit bone list, are not supported yet.
 
 ## Assemblies
 
