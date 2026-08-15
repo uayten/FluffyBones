@@ -17,12 +17,36 @@ namespace Fluffy.Editor
         private const float BoneLabelWidth = 110f;
         private const float AxisLabelWidth = 13f;
         private const float AxisSpacing = 4f;
+        private const float DegreesPerPixel = 0.5f;
+        private const float MinAngle = -180f;
+        private const float MaxAngle = 180f;
 
         // Tuned for legibility on both editor skins rather than taken from
         // Handles.xAxisColor, whose blue is close to unreadable as small text.
         private static readonly Color AxisXColor = new Color(0.93f, 0.44f, 0.44f);
         private static readonly Color AxisYColor = new Color(0.55f, 0.85f, 0.36f);
         private static readonly Color AxisZColor = new Color(0.45f, 0.68f, 1f);
+
+        private static readonly int DragHandleHint = "FluffyAngleDrag".GetHashCode();
+
+        private static GUIStyle _axisXStyle;
+        private static GUIStyle _axisYStyle;
+        private static GUIStyle _axisZStyle;
+
+        // Built on demand: EditorStyles is not ready while static fields initialise.
+        private static GUIStyle AxisXStyle => _axisXStyle ??= AxisStyle(AxisXColor);
+        private static GUIStyle AxisYStyle => _axisYStyle ??= AxisStyle(AxisYColor);
+        private static GUIStyle AxisZStyle => _axisZStyle ??= AxisStyle(AxisZColor);
+
+        private static GUIStyle AxisStyle(Color color)
+        {
+            return new GUIStyle(EditorStyles.label)
+            {
+                normal = { textColor = color },
+                hover = { textColor = color },
+                alignment = TextAnchor.MiddleLeft
+            };
+        }
 
         private SerializedProperty _mode;
         private SerializedProperty _profile;
@@ -227,7 +251,7 @@ namespace Fluffy.Editor
                 pose.arraySize = bones.Count;
                 for (int i = 0; i < bones.Count; i++)
                 {
-                    pose.GetArrayElementAtIndex(i).vector3Value = bones[i].localRotation.eulerAngles;
+                    pose.GetArrayElementAtIndex(i).vector3Value = NormalizeEuler(bones[i].localRotation.eulerAngles);
                 }
             }
 
@@ -257,26 +281,26 @@ namespace Fluffy.Editor
 
         private static void DrawBoneRotation(SerializedProperty rotation, Transform bone)
         {
-            Rect row = EditorGUILayout.GetControlRect();
+            Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
 
-            float previousLabelWidth = EditorGUIUtility.labelWidth;
-            EditorGUIUtility.labelWidth = BoneLabelWidth;
-            Rect fields = EditorGUI.PrefixLabel(row, new GUIContent(bone.name));
-            EditorGUIUtility.labelWidth = previousLabelWidth;
-
-            // PrefixLabel already applied the indent; leaving it on would shift the
-            // three fields a second time.
+            // Every label here is drawn with its own style. Tinting through
+            // GUI.contentColor leaks into whatever the next control draws — which is
+            // how the bone names came out red.
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
 
+            var nameRect = new Rect(row.x, row.y, BoneLabelWidth, row.height);
+            EditorGUI.LabelField(nameRect, bone.name, EditorStyles.label);
+
+            var fields = new Rect(row.x + BoneLabelWidth, row.y, row.width - BoneLabelWidth, row.height);
             float width = (fields.width - AxisSpacing * 2f) / 3f;
             Vector3 euler = rotation.vector3Value;
 
             EditorGUI.BeginChangeCheck();
 
-            euler.x = DrawAxis(new Rect(fields.x, fields.y, width, fields.height), "X", AxisXColor, euler.x);
-            euler.y = DrawAxis(new Rect(fields.x + width + AxisSpacing, fields.y, width, fields.height), "Y", AxisYColor, euler.y);
-            euler.z = DrawAxis(new Rect(fields.xMax - width, fields.y, width, fields.height), "Z", AxisZColor, euler.z);
+            euler.x = DrawAxis(new Rect(fields.x, fields.y, width, fields.height), "X", AxisXStyle, euler.x);
+            euler.y = DrawAxis(new Rect(fields.x + width + AxisSpacing, fields.y, width, fields.height), "Y", AxisYStyle, euler.y);
+            euler.z = DrawAxis(new Rect(fields.xMax - width, fields.y, width, fields.height), "Z", AxisZStyle, euler.z);
 
             bool changed = EditorGUI.EndChangeCheck();
             EditorGUI.indentLevel = indent;
@@ -295,21 +319,85 @@ namespace Fluffy.Editor
         }
 
         /// <summary>
-        /// One axis of a rotation, with its letter tinted to match the axis colours in
-        /// the scene view — so X in the field and the red line on the bone are read as
-        /// the same thing.
+        /// One axis of a rotation: a letter tinted to match the axis colours in the
+        /// scene view, which doubles as the drag handle, and the value beside it.
         /// </summary>
-        private static float DrawAxis(Rect rect, string label, Color color, float value)
+        private static float DrawAxis(Rect rect, string label, GUIStyle style, float value)
         {
             var labelRect = new Rect(rect.x, rect.y, AxisLabelWidth, rect.height);
             var fieldRect = new Rect(rect.x + AxisLabelWidth, rect.y, rect.width - AxisLabelWidth, rect.height);
 
-            Color previous = GUI.contentColor;
-            GUI.contentColor = color;
-            EditorGUI.LabelField(labelRect, label);
-            GUI.contentColor = previous;
+            EditorGUI.LabelField(labelRect, label, style);
+            value = DragAngle(labelRect, value);
 
-            return EditorGUI.FloatField(fieldRect, value);
+            return ClampAngle(EditorGUI.FloatField(fieldRect, value));
+        }
+
+        /// <summary>
+        /// Scrubs the value by dragging sideways on the axis letter, the way Unity's own
+        /// numeric fields work. Written out because that behaviour comes free only when
+        /// Unity draws the label, and it cannot draw a coloured one.
+        /// </summary>
+        private static float DragAngle(Rect handle, float value)
+        {
+            int id = GUIUtility.GetControlID(DragHandleHint, FocusType.Passive, handle);
+            Event current = Event.current;
+
+            EditorGUIUtility.AddCursorRect(handle, MouseCursor.SlideArrow);
+
+            switch (current.GetTypeForControl(id))
+            {
+                case EventType.MouseDown when current.button == 0 && handle.Contains(current.mousePosition):
+                    GUIUtility.hotControl = id;
+                    GUIUtility.keyboardControl = 0;
+                    current.Use();
+                    break;
+
+                case EventType.MouseDrag when GUIUtility.hotControl == id:
+                    value = ClampAngle(value + HandleUtility.niceMouseDelta * DegreesPerPixel);
+                    GUI.changed = true;
+                    current.Use();
+                    break;
+
+                case EventType.MouseUp when GUIUtility.hotControl == id:
+                    GUIUtility.hotControl = 0;
+                    current.Use();
+                    break;
+            }
+
+            return value;
+        }
+
+        /// <summary>
+        /// Holds an angle in -180 to 180. Every rotation is reachable inside that range,
+        /// so nothing is lost, and a drag cannot run off into the thousands.
+        /// </summary>
+        private static float ClampAngle(float angle)
+        {
+            return Mathf.Clamp(angle, MinAngle, MaxAngle);
+        }
+
+        /// <summary>
+        /// Rewrites a rotation into -180 to 180 on every axis. Unity reports euler
+        /// angles as 0 to 360, so a bone bent slightly back reads as 330 rather than
+        /// -30 — the same rotation, but harder to pose with.
+        /// </summary>
+        private static Vector3 NormalizeEuler(Vector3 euler)
+        {
+            return new Vector3(NormalizeAngle(euler.x), NormalizeAngle(euler.y), NormalizeAngle(euler.z));
+        }
+
+        /// <summary>Rewrites an angle into -180 to 180 without changing the rotation.</summary>
+        private static float NormalizeAngle(float angle)
+        {
+            angle %= 360f;
+
+            if (angle > 180f)
+            {
+                return angle - 360f;
+            }
+
+            return angle < -180f ? angle + 360f : angle;
         }
 
         private void CaptureDefaultPose(FluffyBones body)
