@@ -20,9 +20,9 @@ namespace Fluffy
         private const float DefaultReturnStrength = 8f;
         private const float DefaultDrag = 0.15f;
         private const float MinBoneLength = 1e-5f;
-        private const int ConeSegments = 32;
-        private const int ArcSegments = 24;
-        private const float ConeScale = 0.8f;
+        private const float DegreesPerSegment = 7.5f;
+        private const int MinSegments = 6;
+        private const int MaxSegments = 48;
         private const float TwistCircleScale = 0.35f;
         private const float TwistCircleOffset = 0.5f;
 
@@ -37,6 +37,12 @@ namespace Fluffy
         /// inspector can put it into an entry Unity created by zeroing one.
         /// </summary>
         public const float DefaultDummyLength = 0.1f;
+
+        /// <summary>
+        /// How big the drawn limit shapes are by default, as a fraction of the bone's
+        /// length. Public so the component's own setting can start there.
+        /// </summary>
+        public const float DefaultLimitSize = 0.8f;
 
         [Tooltip("Where the chain starts. Everything below it comes along, following " +
                  "the first child of each bone.")]
@@ -175,13 +181,10 @@ namespace Fluffy
                     continue;
                 }
 
-                FluffyLimits limits = ResolveLimits(i);
-
                 _joints.Add(new Joint
                 {
                     Transform = bone,
-                    SwingYLimit = limits.SwingY,
-                    SwingZLimit = limits.SwingZ,
+                    BoneIndex = i,
                     RestLocalRotation = restRotations[i],
                     BoneAxis = Quaternion.Inverse(bone.rotation) * ((tip - bone.position) / length),
                     Length = length,
@@ -218,6 +221,124 @@ namespace Fluffy
                 Joint joint = _joints[i];
                 joint.CurrentTip = joint.Transform.position + joint.Transform.rotation * joint.BoneAxis * joint.Length;
                 joint.PreviousTip = joint.CurrentTip;
+            }
+        }
+
+        /// <summary>
+        /// Reads out what every bone of the chain is doing this frame, for tracing.
+        /// </summary>
+        /// <remarks>
+        /// The angles come out of the same frame and the same decomposition the solver
+        /// clamps in, so a trace lines up with the numbers in the inspector instead of
+        /// having to be translated. Works while the chain is running and while it is not.
+        /// </remarks>
+        public void CaptureState(List<FluffyBoneState> into)
+        {
+            if (into == null || _startBone == null)
+            {
+                return;
+            }
+
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                if (!ResolveRestFrame(bones, i, out Quaternion restRotation, out Vector3 boneAxis, out float length))
+                {
+                    continue;
+                }
+
+                Transform bone = bones[i];
+                FluffyLimits limits = ResolveLimits(i);
+
+                Vector3 direction = bone.rotation * boneAxis;
+                Vector3 local = Quaternion.Inverse(restRotation) * direction;
+                BuildSwingFrame(boneAxis, out Vector3 towardsY, out Vector3 towardsZ);
+
+                float swingY = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsY), -1f, 1f)) * Mathf.Rad2Deg;
+                float swingZ = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsZ), -1f, 1f)) * Mathf.Rad2Deg;
+
+                into.Add(new FluffyBoneState
+                {
+                    Bone = bone,
+                    Index = i,
+                    Head = bone.position,
+                    Direction = direction,
+                    RestDirection = restRotation * boneAxis,
+                    SwingY = swingY,
+                    SwingZ = swingZ,
+                    Twist = TwistAngle(Quaternion.Inverse(restRotation) * bone.rotation, boneAxis),
+                    Limits = limits,
+                    Length = length,
+                    AtSwingYLimit = IsAgainst(swingY, limits.SwingY),
+                    AtSwingZLimit = IsAgainst(swingZ, limits.SwingZ)
+                });
+            }
+        }
+
+        /// <summary>Whether an angle is sitting on one end of its range.</summary>
+        private static bool IsAgainst(float angle, Vector2 range)
+        {
+            const float Touching = 0.05f;
+            return !FluffyLimits.IsFree(range)
+                   && (angle <= range.x + Touching || angle >= range.y - Touching);
+        }
+
+        /// <summary>
+        /// How much of a rotation is a roll about <paramref name="axis"/>, in degrees.
+        /// </summary>
+        /// <remarks>
+        /// The swing-twist decomposition: the part of the quaternion that lies along the
+        /// axis is the roll, and what is left is the swing. Signed, so a trace shows
+        /// which way it rolled rather than only how far.
+        /// </remarks>
+        private static float TwistAngle(Quaternion rotation, Vector3 axis)
+        {
+            var vector = new Vector3(rotation.x, rotation.y, rotation.z);
+            Vector3 projection = Vector3.Project(vector, axis);
+            var twist = new Quaternion(projection.x, projection.y, projection.z, rotation.w);
+
+            if (twist.x * twist.x + twist.y * twist.y + twist.z * twist.z + twist.w * twist.w < 1e-8f)
+            {
+                return 0f;
+            }
+
+            twist.Normalize();
+            float angle = Quaternion.Angle(Quaternion.identity, twist);
+
+            return Vector3.Dot(projection, axis) < 0f ? -angle : angle;
+        }
+
+        /// <summary>
+        /// Moves the running state with the character, as if the chain were rigid for
+        /// that move.
+        /// </summary>
+        /// <remarks>
+        /// For a jump the solver cannot swing through: a character that crosses the level
+        /// between two frames, or simply a frame long enough that its head moved further
+        /// than the bone is long. Left alone, the tips stay where they were and the bones
+        /// are handed a direction that means nothing, so they fly out and spend the next
+        /// frames coming back.
+        ///
+        /// Both tips go through the same rigid move, so the chain keeps the shape it had
+        /// and the speed it was travelling at, and simply arrives with the character.
+        /// Snapping it back to the rest pose instead throws both away, and that discard
+        /// is itself the pop it was meant to prevent.
+        /// </remarks>
+        public void Carry(Vector3 fromPosition, Quaternion fromRotation, Vector3 toPosition, Quaternion toRotation)
+        {
+            if (!_isBuilt)
+            {
+                return;
+            }
+
+            Quaternion turn = toRotation * Quaternion.Inverse(fromRotation);
+
+            for (int i = 0; i < _joints.Count; i++)
+            {
+                Joint joint = _joints[i];
+                joint.CurrentTip = toPosition + turn * (joint.CurrentTip - fromPosition);
+                joint.PreviousTip = toPosition + turn * (joint.PreviousTip - fromPosition);
             }
         }
 
@@ -262,7 +383,10 @@ namespace Fluffy
                 Vector3 offset = nextTip - position;
                 float distance = offset.magnitude;
                 Vector3 direction = distance < MinBoneLength ? restDirection : offset / distance;
-                direction = ApplyAngleLimits(joint, restRotation, direction);
+
+                // Read now, not copied when the chain was built: the limits are authoring
+                // data and get tuned while watching the thing move.
+                direction = ApplyAngleLimits(joint, ResolveLimits(joint.BoneIndex), restRotation, direction);
 
                 nextTip = position + direction * joint.Length;
 
@@ -282,9 +406,10 @@ namespace Fluffy
         /// independent ranges rather than one angle is what makes the cone lopsided:
         /// a cape can be given a lot of room on one side and almost none on the other.
         /// </remarks>
-        private static Vector3 ApplyAngleLimits(Joint joint, Quaternion restRotation, Vector3 direction)
+        private static Vector3 ApplyAngleLimits(
+            Joint joint, FluffyLimits limits, Quaternion restRotation, Vector3 direction)
         {
-            if (FluffyLimits.IsFree(joint.SwingYLimit) && FluffyLimits.IsFree(joint.SwingZLimit))
+            if (FluffyLimits.IsFree(limits.SwingY) && FluffyLimits.IsFree(limits.SwingZ))
             {
                 return direction;
             }
@@ -296,8 +421,8 @@ namespace Fluffy
             float swingY = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsY), -1f, 1f)) * Mathf.Rad2Deg;
             float swingZ = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsZ), -1f, 1f)) * Mathf.Rad2Deg;
 
-            float clampedY = Mathf.Clamp(swingY, joint.SwingYLimit.x, joint.SwingYLimit.y);
-            float clampedZ = Mathf.Clamp(swingZ, joint.SwingZLimit.x, joint.SwingZLimit.y);
+            float clampedY = Mathf.Clamp(swingY, limits.SwingY.x, limits.SwingY.y);
+            float clampedZ = Mathf.Clamp(swingZ, limits.SwingZ.x, limits.SwingZ.y);
 
             if (Mathf.Approximately(clampedY, swingY) && Mathf.Approximately(clampedZ, swingZ))
             {
@@ -379,7 +504,7 @@ namespace Fluffy
         /// the plane its axis swings in, and it is lopsided exactly when that axis's
         /// minimum and maximum differ.
         /// </remarks>
-        public void DrawLimitGizmos()
+        public void DrawLimitGizmos(float scale = DefaultLimitSize)
         {
             if (_startBone == null)
             {
@@ -391,63 +516,130 @@ namespace Fluffy
 
             for (int i = 0; i < bones.Count; i++)
             {
-                Transform bone = bones[i];
-                Vector3 head = bone.position;
-                Vector3 toTip = ResolveTip(bones, i) - head;
-                float length = toTip.magnitude;
+                Quaternion restRotation;
+                Vector3 boneAxis;
+                float length;
 
-                if (length < MinBoneLength)
+                if (!ResolveRestFrame(bones, i, out restRotation, out boneAxis, out length))
                 {
                     continue;
                 }
 
                 FluffyLimits limits = ResolveLimits(i);
-                if (limits.IsUnrestricted)
-                {
-                    continue;
-                }
+                Vector3 head = bones[i].position;
+                float size = length * scale;
 
-                Vector3 axis = toTip / length;
-                BuildSwingFrame(axis, out Vector3 towardsY, out Vector3 towardsZ);
-                float size = length * ConeScale;
+                // Everything hangs off the rest direction, in the bone's own axes, which
+                // is where the limits are measured from — the same frame the solver
+                // clamps in, so the shape stays put and the bone travels inside it.
+                Vector3 restDirection = restRotation * boneAxis;
+                BuildSwingFrame(boneAxis, out Vector3 localY, out Vector3 localZ);
+                Vector3 towardsY = restRotation * localY;
+                Vector3 towardsZ = restRotation * localZ;
 
                 // Each axis in its own colour, matching the lines Show Axes draws: the
                 // arc you are looking at names the field you need to edit.
-                DrawSwingArc(head, axis, towardsY, limits.SwingY, size, AxisYColor);
-                DrawSwingArc(head, axis, towardsZ, limits.SwingZ, size, AxisZColor);
-                DrawTwistCircle(head, axis, towardsY, towardsZ, limits.Twist, size);
+                DrawSwingArc(head, restDirection, towardsY, limits.SwingY, size, AxisYColor);
+                DrawSwingArc(head, restDirection, towardsZ, limits.SwingZ, size, AxisZColor);
+                DrawTwistCircle(head, restDirection, towardsY, towardsZ, limits.Twist, size);
             }
 
             Gizmos.color = previous;
         }
 
         /// <summary>
-        /// The flat arc one axis may swing through, drawn in that axis's colour.
+        /// The frame a bone's limits are measured in: where it would point with only the
+        /// animation on it, and the axis it runs along in its own space.
+        /// </summary>
+        /// <remarks>
+        /// Read off the joint while the chain is running rather than off the bone, whose
+        /// rotation is the thing being held inside the limit. Drawn from the bone, the
+        /// shapes turned with it and there was no telling how far through its range it
+        /// had travelled — the cone moved exactly as much as the bone did.
+        ///
+        /// The rest frame still follows the parent, because the limit does: a skirt
+        /// strand's cone swings with the hips and holds the strand inside it.
+        /// </remarks>
+        private bool ResolveRestFrame(
+            List<Transform> bones, int index, out Quaternion restRotation, out Vector3 boneAxis, out float length)
+        {
+            Transform bone = bones[index];
+            Joint joint = FindJoint(bone);
+
+            if (joint != null)
+            {
+                Quaternion parentRotation = bone.parent != null ? bone.parent.rotation : Quaternion.identity;
+                restRotation = parentRotation * joint.RestLocalRotation;
+                boneAxis = joint.BoneAxis;
+                length = joint.Length;
+
+                return length >= MinBoneLength;
+            }
+
+            // Not built, so nothing has moved the bone: where it points is where it rests.
+            Vector3 toTip = ResolveTip(bones, index) - bone.position;
+            length = toTip.magnitude;
+            restRotation = bone.rotation;
+            boneAxis = length < MinBoneLength
+                ? Vector3.forward
+                : Quaternion.Inverse(bone.rotation) * (toTip / length);
+
+            return length >= MinBoneLength;
+        }
+
+        /// <summary>The running joint for a bone, or null when the chain is not built.</summary>
+        private Joint FindJoint(Transform bone)
+        {
+            if (!_isBuilt)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < _joints.Count; i++)
+            {
+                if (_joints[i].Transform == bone)
+                {
+                    return _joints[i];
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The flat arc one axis may swing through, drawn in that axis's colour: nothing
+        /// at 0 to 0, a full circle round the bone's head at -180 to 180.
         /// </summary>
         private static void DrawSwingArc(
             Vector3 head, Vector3 axis, Vector3 towards, Vector2 range, float length, Color color)
         {
-            if (FluffyLimits.IsFree(range))
+            float sweep = range.y - range.x;
+            if (sweep <= 0f)
             {
                 return;
             }
 
             Gizmos.color = color;
 
+            int segments = SegmentsFor(sweep);
             Vector3 start = head + Swing(axis, towards, range.x) * length;
             Vector3 previous = start;
 
-            for (int step = 1; step <= ArcSegments; step++)
+            for (int step = 1; step <= segments; step++)
             {
-                float degrees = Mathf.Lerp(range.x, range.y, step / (float)ArcSegments);
+                float degrees = Mathf.Lerp(range.x, range.y, step / (float)segments);
                 Vector3 point = head + Swing(axis, towards, degrees) * length;
                 Gizmos.DrawLine(previous, point);
                 previous = point;
             }
 
-            // The two edges of the arc, so where it stops is unmistakable.
-            Gizmos.DrawLine(head, start);
-            Gizmos.DrawLine(head, previous);
+            // The two edges, so where the arc stops is unmistakable — unless it closes
+            // on itself, where both fall on the same line behind the bone.
+            if (sweep < 360f)
+            {
+                Gizmos.DrawLine(head, start);
+                Gizmos.DrawLine(head, previous);
+            }
         }
 
         /// <summary>
@@ -474,9 +666,7 @@ namespace Fluffy
             float radius = length * TwistCircleScale;
             Vector3 centre = head + axis * (length * TwistCircleOffset);
 
-            // Segments in proportion to the sweep, so a narrow range is not drawn with
-            // the same twenty lines as a whole turn.
-            int segments = Mathf.Max(1, Mathf.CeilToInt(ConeSegments * (sweep / 360f)));
+            int segments = SegmentsFor(sweep);
             Vector3 previous = centre + TwistPoint(towardsY, towardsZ, radius, range.x);
 
             for (int step = 1; step <= segments; step++)
@@ -507,6 +697,16 @@ namespace Fluffy
         {
             float radians = degrees * Mathf.Deg2Rad;
             return (towardsY * Mathf.Cos(radians) + towardsZ * Mathf.Sin(radians)) * radius;
+        }
+
+        /// <summary>
+        /// How many lines to draw a range with. In proportion to how far it reaches, so a
+        /// narrow one is not drawn with as many as a whole turn and a whole turn does not
+        /// come out a visible polygon.
+        /// </summary>
+        private static int SegmentsFor(float sweep)
+        {
+            return Mathf.Clamp(Mathf.CeilToInt(sweep / DegreesPerSegment), MinSegments, MaxSegments);
         }
 
         /// <summary>The bone's direction tipped <paramref name="degrees"/> towards one axis.</summary>
@@ -826,22 +1026,65 @@ namespace Fluffy
                 return bone.GetChild(0).position;
             }
 
-            return bone.position + (bone.position - bones[index - 1].position);
+            return bone.position + TipDirection(bones, index) * AutoDummyLength(bones, index);
         }
 
         /// <summary>
-        /// Which way the invented tip points: along the rig when there is a bone below,
-        /// otherwise carrying on from the bone before it.
+        /// Which way a bone points when it has no next bone to aim at: along the rig when
+        /// there is a bone below, otherwise off the bone's own rotation.
         /// </summary>
+        /// <remarks>
+        /// Off its rotation rather than as a straight continuation of the bone before it.
+        /// The two agree while the chain is straight and part company the moment the last
+        /// bone turns, which left the dummy pointing the way the chain used to go while
+        /// the bone it belongs to had moved on — the one bone in the chain that did not
+        /// follow its own rotation.
+        ///
+        /// The axis is read off the previous bone rather than assumed to be X: the
+        /// direction from it to this one, taken into its own frame, is the axis a chain
+        /// runs along, and putting this bone's rotation on it carries the tip round with
+        /// the bone.
+        /// </remarks>
         private static Vector3 TipDirection(List<Transform> bones, int index)
         {
             Transform bone = bones[index];
 
-            Vector3 direction = bone.childCount > 0
-                ? bone.GetChild(0).position - bone.position
-                : bone.position - bones[index - 1].position;
+            if (bone.childCount > 0)
+            {
+                Vector3 toChild = bone.GetChild(0).position - bone.position;
+                return toChild.sqrMagnitude < MinBoneLength ? bone.forward : toChild.normalized;
+            }
 
-            return direction.sqrMagnitude < MinBoneLength ? bone.forward : direction.normalized;
+            // A chain of one has no bone before it to read the axis off; its parent in the
+            // rig is the next best thing, and a loose bone falls back to its own forward.
+            Transform previous = index > 0 ? bones[index - 1] : bone.parent;
+            if (previous == null)
+            {
+                return bone.forward;
+            }
+
+            Vector3 along = bone.position - previous.position;
+            if (along.sqrMagnitude < MinBoneLength)
+            {
+                return bone.forward;
+            }
+
+            return bone.rotation * (Quaternion.Inverse(previous.rotation) * along.normalized);
+        }
+
+        /// <summary>How long an invented tip is when its length is measured off the rig.</summary>
+        private static float AutoDummyLength(List<Transform> bones, int index)
+        {
+            Transform bone = bones[index];
+            Transform previous = index > 0 ? bones[index - 1] : bone.parent;
+
+            if (previous == null)
+            {
+                return DefaultDummyLength;
+            }
+
+            float length = Vector3.Distance(bone.position, previous.position);
+            return length < MinBoneLength ? DefaultDummyLength : length;
         }
 
         /// <summary>Whether the bone at <paramref name="index"/> ends in an invented tip.</summary>
@@ -868,11 +1111,11 @@ namespace Fluffy
             /// <summary>Rest distance from the bone's head to its tip, in world units.</summary>
             public float Length;
 
-            /// <summary>Min and max swing towards the bone's local Y, in degrees.</summary>
-            public Vector2 SwingYLimit;
-
-            /// <summary>Min and max swing towards the bone's local Z, in degrees.</summary>
-            public Vector2 SwingZLimit;
+            /// <summary>
+            /// Which bone of the chain this is, so its limits can be looked up as they
+            /// are now rather than as they were when the chain was built.
+            /// </summary>
+            public int BoneIndex;
 
             /// <summary>Position along the chain: 0 at the root, 1 at the tip.</summary>
             public float NormalizedDepth;

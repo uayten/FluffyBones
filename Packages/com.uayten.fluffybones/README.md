@@ -57,7 +57,7 @@ for a variant, edit it and every chain using it updates at once.
 | Strength Falloff Along Chain | Scales that strength from start (0) to end (1). Lower at the end whips more. |
 | Damping | Motion bled off each frame. 0 swings forever, 1 kills it instantly. This is what stops wobble. |
 | Gravity | Constant world acceleration. A light droop reads better than -9.81. |
-| Teleport Threshold | Character movement in one frame that snaps the chains back to rest. |
+| Teleport Distance | How far the character may move between two frames before the chains are carried along rigidly instead of swinging, in world units. Past this there is no sensible swing to compute, so they travel with the character keeping their shape. Around a bone's length suits most rigs. |
 
 The two spring values are easy to mix up. **Strength** decides *where* the chain
 wants to be; **damping** decides *how fast it stops moving*. Wobble that will not
@@ -106,7 +106,7 @@ green, Z blue.
 
 Under **Angle Limits**, a bone may turn only so far from its pose, set as a
 minimum and a maximum on each of its own axes, in degrees. -180 to 180 leaves an
-axis free, which is the default and draws nothing.
+axis free, which is the default.
 
 - **Y Swing** and **Z Swing** open the cone the bone moves inside.
 - **X Twist** is the roll along the bone, drawn as a ring around it that spans the
@@ -140,9 +140,26 @@ through a leg, and there the two sides are usually equal.
 
 Tick **Show Limits** to see them. Everything starts at the bone's head: a green
 arc for the Y range, a blue arc for the Z range, and a red ring around the bone
-for the twist. Every shape spans its own range and no more, so it is lopsided
-whenever a minimum and maximum differ and a glance tells you which way a bone is
-free to go. A bone free on all three axes draws nothing at all.
+for the twist.
+
+Every shape spans its own range and no more. It is lopsided whenever a minimum
+and maximum differ, so a glance tells you which way a bone is free to go; it
+disappears at 0 to 0, where the bone may not move on that axis at all; and it
+closes into a full circle at -180 to 180, where the bone is free. A default bone
+therefore wears three circles — which is what "free on every axis" looks like,
+and is the honest picture. Untick Show Limits when it is in the way, or turn
+**Limit Size** down: it scales every shape against the bone's length, which is
+what to reach for when the shapes of neighbouring bones run into each other.
+
+The shapes hang off the bone's **rest** direction, not off where the bone is now.
+That is the whole point of watching them in play mode: the shape stays where the
+limit is and you see the bone travel through its range and stop against the edge.
+It still follows the bone's parent, because the limit does — a skirt strand's
+range swings with the hips and holds the strand inside it.
+
+To watch it in the game view, turn on its **Gizmos** button, in the toolbar along
+the top of the view. Gizmos are an editor thing: they draw in the game view while
+you play in the editor, but never in a build.
 
 One flat arc per axis, rather than the rim of the cone the two make together. The
 rim is the truthful shape, but a chain of them reads as a knot of ellipses, and an
@@ -178,6 +195,61 @@ These sit on the chain rather than on the profile on purpose: a profile is feel
 and gets shared between a tail and a skirt, while a dummy length is geometry and
 belongs to one rig.
 
+## Tracing what a bone did
+
+Something that goes wrong for three frames cannot be caught by eye, and a
+screenshot cannot tell a pop from motion that is simply fast — in a still they
+look the same. **Fluffy Debugger** writes the numbers instead.
+
+Add it beside Fluffy Bones, press play, and tick **Record**. Untick it and the
+trace is written out; the console prints the path. It also stops and writes
+itself out at **Max Frames**, so one left running does not eat memory. **Chain**
+picks which chain to record, -1 meaning all of them, and **Bone Filter** narrows
+it to bones whose name contains what you type.
+
+Each row is one bone in one frame:
+
+| Column | What it tells you |
+| --- | --- |
+| `deltaTime`, `steps` | How long the frame was and how many steps it was split into. A bone that turns a long way in a long frame was moving at its usual speed; the same turn in a sixtieth of a second is a pop. |
+| `turnDeg`, `turnDegPerSec` | How far the bone turned in the world since the last frame. Per second is the honest one to compare. |
+| `swingY`, `swingZ`, `twist` | Where the bone sits in the frame the limits are measured in — the same numbers the fields in the inspector set. |
+| `atYLimit`, `atZLimit` | Whether it is pinned against one end of its range. |
+| `offRestDeg` | How far it is from where its pose puts it. |
+| `carried` | Whether the character moved far enough that frame for the chains to be carried rather than swung. |
+
+The distinction the first two columns make is the point: turning 20 degrees in a
+frame that lasted a third of a second is slower than usual, while 20 degrees in a
+sixtieth is something to explain.
+
+Files land beside the project in the editor, in `FluffyDebug`, and in the
+persistent data path in a build — so a trace can be asked of someone playing a
+build and read back later.
+
+## The playground scene
+
+`Samples/Playground/FluffyPlayground.unity` is there to try things in: a six-bone
+tail in Single mode and an eight-strand skirt in Multiple mode, both found by
+**Detect chains** from their bone names, and a **Fluffy Movement Test** component that
+walks each character from side to side so the chains have something to react to.
+Press play and watch it from the scene view. Right-click Fluffy Movement Test and pick
+**Teleport** to jump the character and watch Teleport Distance carry the chains
+along instead of letting them be flung.
+
+It has no models, no materials and no lights. The bones are empty transforms and
+everything you see is drawn by **Show Bones**, **Show Axes** and **Show Limits**.
+That is on purpose: it opens identically in Built-in, URP and HDRP, which a scene
+with one material in it would not. It also means the Game view shows nothing —
+this is a scene you watch in the scene view.
+
+The bones run along their own local X, the way an exported rig does, so the angle
+limit gizmos line up with the axes the inspector names.
+
+The folder loses its tilde on purpose. `Samples~` is what the Package Manager
+imports from, but Unity does not import a folder with one at all, so the scene
+could not be opened or edited while the plugin is being built. It becomes
+`Samples~`, with a `samples` entry in `package.json`, at publish.
+
 ## Contents
 
 All types live in the `Fluffy` namespace.
@@ -187,12 +259,16 @@ All types live in the `Fluffy` namespace.
 | `FluffyBones` | The component. Goes on the character, owns its chains and steps them. **Working.** |
 | `FluffyChain` | One bone chain, held in a list on the component. Not a component itself. **Working.** |
 | `FluffyProfile` | The behaviour asset — the tuning values, shareable and duplicable. **Working.** |
+| `FluffyDebugger` | Records what the chains did, frame by frame, to a CSV. **Working.** |
 | `FluffyCollider` | Collision shape the chains are pushed out of. *Stub.* |
 
 ## Known limitations
 
-- The solver steps once per rendered frame, so behaviour changes with frame
-  rate. Substepping on a fixed timestep is still to be done.
+- The solver steps at about a sixtieth of a second, splitting a longer frame into
+  as many as sixteen steps. A frame longer than that — a stall of more than a
+  quarter of a second — is stepped in slightly larger pieces rather than costing
+  without bound, so behaviour still drifts a little at the very bottom of the
+  frame rate range.
 - **X Twist** does not restrict anything yet. The solver swings the bone towards
   its tip and never rolls it, so there is no twist to clamp; the limit is stored,
   drawn and copied like the other two, ready for when there is.

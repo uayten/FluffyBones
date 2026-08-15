@@ -61,11 +61,12 @@ namespace Fluffy.Editor
         private SerializedProperty _profile;
         private SerializedProperty _chains;
         private SerializedProperty _detectionKeywords;
-        private SerializedProperty _teleportThreshold;
+        private SerializedProperty _teleportDistance;
         private SerializedProperty _showBones;
         private SerializedProperty _showAxes;
         private SerializedProperty _showLimits;
         private SerializedProperty _boneColor;
+        private SerializedProperty _limitSize;
 
         private UnityEditor.Editor _profileEditor;
         private SerializedObject _poseSerialized;
@@ -83,11 +84,12 @@ namespace Fluffy.Editor
             _profile = serializedObject.FindProperty("_profile");
             _chains = serializedObject.FindProperty("_chains");
             _detectionKeywords = serializedObject.FindProperty("_detectionKeywords");
-            _teleportThreshold = serializedObject.FindProperty("_teleportThreshold");
+            _teleportDistance = serializedObject.FindProperty("_teleportDistance");
             _showBones = serializedObject.FindProperty("_showBones");
             _showAxes = serializedObject.FindProperty("_showAxes");
             _showLimits = serializedObject.FindProperty("_showLimits");
             _boneColor = serializedObject.FindProperty("_boneColor");
+            _limitSize = serializedObject.FindProperty("_limitSize");
         }
 
         private void OnDisable()
@@ -435,10 +437,19 @@ namespace Fluffy.Editor
 
             EditorGUILayout.PropertyField(_showLimits, new GUIContent("Show Limits"));
 
+            if (_showLimits.boolValue)
+            {
+                EditorGUILayout.PropertyField(_limitSize, new GUIContent(
+                    "Limit Size",
+                    "How big the shapes are drawn, as a fraction of the bone's length. "
+                    + "Turn it down when neighbouring bones' shapes run into each other."));
+            }
+
             EditorGUILayout.HelpBox(
                 "How far a bone may turn from its pose, in degrees, per axis. Every bone "
-                + "takes the global limits unless it overrides them. -180 to 180 leaves an "
-                + "axis free and draws nothing.",
+                + "takes the global limits unless it overrides them. Each shape drawn "
+                + "spans its own range: nothing at 0 to 0, all the way round at -180 to "
+                + "180, which is free.",
                 MessageType.None);
 
             SerializedProperty global = ResolveGlobalLimits(owner, chain);
@@ -940,7 +951,11 @@ namespace Fluffy.Editor
 
             using (new EditorGUI.IndentLevelScope())
             {
-                EditorGUILayout.PropertyField(_teleportThreshold, new GUIContent("Teleport Threshold"));
+                EditorGUILayout.PropertyField(_teleportDistance, new GUIContent(
+                    "Teleport Distance",
+                    "Movement further than this between two frames, in world units, is "
+                    + "more than the chains can swing through: they are carried along "
+                    + "rigidly for it instead. Around a bone's length is a good value."));
 
                 using (new EditorGUI.DisabledScope(!Application.isPlaying))
                 {

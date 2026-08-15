@@ -28,6 +28,21 @@ namespace Fluffy
     [AddComponentMenu("Fluffy Bones/Fluffy Bones")]
     public class FluffyBones : MonoBehaviour
     {
+        /// <summary>
+        /// How long a solver step aims to be. A frame longer than this is split into
+        /// several, so how hard the chain is pulled in one step does not depend on how
+        /// long the frame happened to take.
+        /// </summary>
+        private const float TargetStep = 1f / 60f;
+
+        /// <summary>
+        /// The most steps one frame is split into. A frame long enough to want more is
+        /// stepped in slightly larger pieces rather than costing without bound; at
+        /// Unity's own limit of a third of a second, that is about 20 ms a step.
+        /// </summary>
+        private const int MaxSubsteps = 16;
+
+
         [Tooltip("Single: one chain, like a tail. Multiple: many chains sharing one " +
                  "profile, like the strands of a skirt.")]
         [SerializeField] private FluffyChainMode _mode = FluffyChainMode.Single;
@@ -46,11 +61,12 @@ namespace Fluffy
             "tail", "skirt", "hair", "ponytail", "cape", "cloak", "chain", "ribbon", "ear"
         };
 
-        [Tooltip("How far the character may move in a single frame before the chains are " +
-                 "snapped back to their rest pose instead of swinging. Keeps teleports " +
-                 "from launching them across the level.")]
+        [Tooltip("How far the character may move between two frames before the chains are " +
+                 "carried along rigidly instead of swinging, in world units. Past this the " +
+                 "solver has no sensible swing to compute, so the chains simply travel " +
+                 "with the character. Around a bone's length is a good value. 0 turns it off.")]
         [Min(0f)]
-        [SerializeField] private float _teleportThreshold = 1f;
+        [SerializeField] private float _teleportDistance = 1f;
 
         [Tooltip("Draw the chains' bones in the scene view, so they can be seen and " +
                  "posed without a separate bone renderer.")]
@@ -64,11 +80,19 @@ namespace Fluffy
         [SerializeField] private bool _showAxes;
 
         [Tooltip("Draw how far each bone may move: an arc for the Y swing, another for " +
-                 "the Z, and a circle around the bone for the X twist. Each in its axis " +
-                 "colour, the same ones Show Axes uses.")]
+                 "the Z, and a ring around the bone for the X twist. Each in its axis " +
+                 "colour, the same ones Show Axes uses, and each spanning its own range " +
+                 "— so a free axis closes into a full circle.")]
         [SerializeField] private bool _showLimits;
 
+        [Tooltip("Size of the drawn limits, as a fraction of the bone's length. Turn it " +
+                 "down when the shapes of neighbouring bones run into each other and you " +
+                 "cannot tell which belongs to which.")]
+        [Range(0.1f, 1.5f)]
+        [SerializeField] private float _limitSize = FluffyChain.DefaultLimitSize;
+
         private Vector3 _lastPosition;
+        private Quaternion _lastRotation = Quaternion.identity;
 
 #if UNITY_EDITOR
         /// <summary>
@@ -105,6 +129,20 @@ namespace Fluffy
         /// <summary>Chains this character simulates.</summary>
         public IReadOnlyList<FluffyChain> Chains => _chains;
 
+        /// <summary>Seconds the last simulated frame covered.</summary>
+        /// <remarks>
+        /// With the two below, this is what a trace needs to tell a pop from fast
+        /// motion: a bone that turns a long way in a frame that was itself long has
+        /// only moved at its usual speed.
+        /// </remarks>
+        public float LastDeltaTime { get; private set; }
+
+        /// <summary>How many steps the last frame was split into.</summary>
+        public int LastStepCount { get; private set; }
+
+        /// <summary>Whether the last frame moved far enough to carry the chains along.</summary>
+        public bool CarriedLastFrame { get; private set; }
+
         private void Awake()
         {
             Rebuild();
@@ -123,21 +161,46 @@ namespace Fluffy
                 return;
             }
 
-            Vector3 position = transform.position;
-            bool teleported = _teleportThreshold > 0f
-                              && (position - _lastPosition).sqrMagnitude > _teleportThreshold * _teleportThreshold;
+            transform.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
 
-            _lastPosition = position;
+            // A distance, and deliberately not a speed: what the solver cannot swing
+            // through is how far the bones' heads moved between two of its samples, and
+            // that is the same whether the character warped or the frame simply took a
+            // third of a second. Either way the chains are carried along rather than
+            // reset, so a frame that trips this by accident costs nothing to look at.
+            bool jumped = _teleportDistance > 0f
+                          && (position - _lastPosition).sqrMagnitude > _teleportDistance * _teleportDistance;
 
-            if (teleported)
+            if (jumped)
             {
-                ResetToRestPose();
-                return;
+                for (int i = 0; i < _chains.Count; i++)
+                {
+                    _chains[i].Carry(_lastPosition, _lastRotation, position, rotation);
+                }
             }
 
-            for (int i = 0; i < _chains.Count; i++)
+            _lastPosition = position;
+            _lastRotation = rotation;
+            CarriedLastFrame = jumped;
+
+            // Split the frame instead of handing the solver whatever it was. The spring
+            // step is proportional to the time given, so a stalled frame — Unity hands
+            // out a third of a second — moved a tip further than the bone is long in one
+            // go: the chain was flung and spent the next frames coming back, which is the
+            // pop that used to be blamed on the teleport check. Splitting also settles the
+            // damping, which is applied once per step and so used to depend on frame rate.
+            int steps = Mathf.Clamp(Mathf.CeilToInt(deltaTime / TargetStep), 1, MaxSubsteps);
+            float step = deltaTime / steps;
+
+            LastDeltaTime = deltaTime;
+            LastStepCount = steps;
+
+            for (int s = 0; s < steps; s++)
             {
-                _chains[i].Simulate(deltaTime, _profile);
+                for (int i = 0; i < _chains.Count; i++)
+                {
+                    _chains[i].Simulate(step, _profile);
+                }
             }
         }
 
@@ -152,7 +215,7 @@ namespace Fluffy
                 _chains[i].Build(this);
             }
 
-            _lastPosition = transform.position;
+            transform.GetPositionAndRotation(out _lastPosition, out _lastRotation);
         }
 
         /// <summary>Snaps every chain back to its rest pose and clears the accumulated motion.</summary>
@@ -163,7 +226,7 @@ namespace Fluffy
                 _chains[i].ResetToRestPose();
             }
 
-            _lastPosition = transform.position;
+            transform.GetPositionAndRotation(out _lastPosition, out _lastRotation);
         }
 
         /// <summary>
@@ -357,7 +420,7 @@ namespace Fluffy
                 if (_showLimits)
                 {
                     // No colour set here: every limit shape carries its own axis colour.
-                    _chains[i].DrawLimitGizmos();
+                    _chains[i].DrawLimitGizmos(_limitSize);
                 }
             }
         }

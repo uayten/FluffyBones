@@ -68,6 +68,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Copy this chain's setup to the others**: pushes one chain's pose asset, dummy
   bone settings and profile override onto every other chain, leaving their start
   and last bones alone.
+- **Limit Size**, beside Show Limits: scales the drawn limit shapes against the
+  bone's length, for when neighbouring bones' shapes run into each other.
+- **Fluffy Debugger**, a component that records what the chains did frame by
+  frame to a CSV: how far each bone turned, how long the frame it turned in was,
+  where it sits in the frame the limits are measured in, and whether it is pinned
+  against one of them. Something that goes wrong for three frames cannot be caught
+  by eye, and a still cannot tell a pop from motion that is merely fast — the
+  frame length beside the turn can. `FluffyChain.CaptureState` reads the same
+  decomposition the solver clamps in, and `FluffyBones` now reports the last
+  frame's length, step count and whether the chains were carried.
 
 ### Changed in this release
 
@@ -101,6 +111,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A dropped frame threw the chains. The solver stepped once per rendered frame
+  with whatever time had passed, and every term is proportional to it: at Unity's
+  own limit for a stalled frame, a third of a second, the spring alone moved a tip
+  further than its bone is long in a single step, so the chain was flung and spent
+  the following frames coming back. Measured on the playground tail, a bone turned
+  at 9600 degrees a second around a stall against 660 in normal motion. A frame is
+  now split into steps of about a sixtieth of a second, up to sixteen of them, and
+  the same stall peaks at 500 — below normal motion. Damping is applied per step,
+  so this settles how the chain behaves at different frame rates too: two seconds
+  of the same movement at 20 fps and at 60 fps used to leave the tip 0.55 units
+  apart and now leave it 0.07.
+- A character that jumps further than the chains can swing through is carried
+  along rigidly instead of being snapped back to its rest pose. The snap threw
+  away the pose and the motion, and that discard was itself a visible pop; the
+  chains now arrive with the character keeping both. `Teleport Threshold` became
+  **Teleport Distance** to say what it measures — a distance between two frames,
+  not a speed, because what the solver cannot swing through is how far the bones'
+  heads moved between two of its samples.
+- Limits edited while the chain was running never reached the solver. They were
+  copied into the joints when the chain was built, so the fields and the drawn
+  shape showed the new numbers while the bones went on obeying the old ones —
+  an axis locked to 0 to 0 mid-play still swung 62 degrees. The solver reads them
+  as they are now, per bone per step; the joints no longer carry a copy.
+- The limit shapes turned with the bone they belong to, so there was no telling
+  how far through its range it had travelled — the shape moved exactly as much as
+  the bone did. They are anchored to the bone's rest frame now, the same one the
+  solver clamps in, so the shape stays where the limit is and the bone travels
+  inside it. It still follows the parent, because the limit does.
+- The swing arcs were drawn in the wrong plane on any bone with roll. The frame
+  was built from the bone's world direction, so "towards Y" came out of world up,
+  while the solver builds it from the bone's own axis — 35 degrees apart on a
+  bone with 55 degrees of roll, and only agreeing at all on a rig with none.
+- A free axis drew nothing, so ticking **Show Limits** on a bone at -180 to 180
+  showed an empty scene and left you unable to tell "free" from "not drawn yet".
+  Every shape now spans its own range throughout: nothing at 0 to 0, a full
+  circle at -180 to 180. Segment counts follow the sweep, so a narrow arc is not
+  drawn with as many lines as a whole turn and a whole turn is not a polygon.
+- The dummy bone did not turn with the bone it belongs to. Its tip was invented
+  by carrying straight on from the bone before it, which matches the bone's own
+  rotation only while the chain is straight — the moment the last bone turned,
+  posed or simulated, the dummy stayed pointing the way the chain used to go. It
+  now comes off the bone's rotation, the axis read from the previous bone rather
+  than assumed to be X. Identical at rest, so no rig moves and the solver is
+  unaffected; the limit gizmos on the last bone follow it too now.
+- A chain of one bone threw. Dragging a leaf bone into **Start Bone** left the
+  invented tip reaching for `bones[-1]`. It measures from the bone's parent in
+  the rig now, and from nothing but its own forward if it has none.
 - Picking **Multiple** sprang straight back to Single. The Default Pose section
   refreshed the component's own `SerializedObject` halfway through drawing the
   inspector, which threw away everything edited above it that frame — the mode,
