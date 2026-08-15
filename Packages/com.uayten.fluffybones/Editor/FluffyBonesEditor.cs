@@ -17,6 +17,7 @@ namespace Fluffy.Editor
         private const float BoneLabelWidth = 110f;
         private const float PoseAssetLabelWidth = 175f;
         private const float AxisLabelWidth = 13f;
+        private const float RangeLabelWidth = 30f;
         private const float AxisSpacing = 4f;
         private const float OverrideToggleWidth = 74f;
         private const float DegreesPerPixel = 0.5f;
@@ -487,7 +488,9 @@ namespace Fluffy.Editor
 
         /// <summary>
         /// A minimum and a maximum in degrees, side by side, under a label in the axis's
-        /// own colour so it matches the arc drawn in the scene.
+        /// own colour so it matches the arc drawn in the scene. The axis letter cannot be
+        /// the drag handle here the way it is for a rotation — one label sits over two
+        /// numbers — so each end gets its own word, tinted the same colour, as its handle.
         /// </summary>
         private static void DrawRange(SerializedProperty range, string label, GUIStyle style)
         {
@@ -506,16 +509,34 @@ namespace Fluffy.Editor
             Vector2 value = range.vector2Value;
 
             EditorGUI.BeginChangeCheck();
-            float min = ClampAngle(EditorGUI.FloatField(minRect, value.x));
-            float max = ClampAngle(EditorGUI.FloatField(maxRect, value.y));
+            float min = DrawAngle(minRect, "Min", style, RangeLabelWidth, value.x);
+            bool minChanged = EditorGUI.EndChangeCheck();
 
-            if (EditorGUI.EndChangeCheck())
-            {
-                // A maximum below the minimum would be an arc the bone can never satisfy.
-                range.vector2Value = new Vector2(Mathf.Min(min, max), Mathf.Max(min, max));
-            }
+            EditorGUI.BeginChangeCheck();
+            float max = DrawAngle(maxRect, "Max", style, RangeLabelWidth, value.y);
+            bool maxChanged = EditorGUI.EndChangeCheck();
 
             EditorGUI.indentLevel = indent;
+
+            if (!minChanged && !maxChanged)
+            {
+                return;
+            }
+
+            // A maximum below the minimum would be an arc the bone can never satisfy, so
+            // the end being edited stops against the other rather than crossing it.
+            // Swapping the two mid-drag would hand the cursor the value it was dragging
+            // away from, and the one it was dragging would be lost.
+            if (minChanged)
+            {
+                min = Mathf.Min(min, max);
+            }
+            else
+            {
+                max = Mathf.Max(min, max);
+            }
+
+            range.vector2Value = new Vector2(min, max);
         }
 
         private void DrawPoseAsset(SerializedProperty poseAsset)
@@ -696,8 +717,18 @@ namespace Fluffy.Editor
         /// </summary>
         private static float DrawAxis(Rect rect, string label, GUIStyle style, float value)
         {
-            var labelRect = new Rect(rect.x, rect.y, AxisLabelWidth, rect.height);
-            var fieldRect = new Rect(rect.x + AxisLabelWidth, rect.y, rect.width - AxisLabelWidth, rect.height);
+            return DrawAngle(rect, label, style, AxisLabelWidth, value);
+        }
+
+        /// <summary>
+        /// An angle field with a tinted label that doubles as the drag handle. The label
+        /// names whatever the number is — an axis in a rotation, an end of a range — so
+        /// the width it needs comes from the caller.
+        /// </summary>
+        private static float DrawAngle(Rect rect, string label, GUIStyle style, float labelWidth, float value)
+        {
+            var labelRect = new Rect(rect.x, rect.y, labelWidth, rect.height);
+            var fieldRect = new Rect(rect.x + labelWidth, rect.y, rect.width - labelWidth, rect.height);
 
             EditorGUI.LabelField(labelRect, label, style);
             value = DragAngle(labelRect, value);
@@ -714,6 +745,14 @@ namespace Fluffy.Editor
         {
             int id = GUIUtility.GetControlID(DragHandleHint, FocusType.Passive, handle);
             Event current = Event.current;
+
+            // A field greys itself out on its own; a hand-rolled handle does not, and the
+            // global limits are drawn disabled under every bone that does not override
+            // them — dragging there would edit the greyed row.
+            if (!GUI.enabled)
+            {
+                return value;
+            }
 
             EditorGUIUtility.AddCursorRect(handle, MouseCursor.SlideArrow);
 
