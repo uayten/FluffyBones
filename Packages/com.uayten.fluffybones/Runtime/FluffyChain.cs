@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FluffyBones
+namespace Fluffy
 {
     /// <summary>
     /// A single chain of bones driven by the Fluffy Bones solver — a tail, one
@@ -10,9 +10,9 @@ namespace FluffyBones
     /// </summary>
     /// <remarks>
     /// Not a component: chains live in a list on the character's
-    /// <see cref="FluffyBody"/>, which owns them and steps them. The bones are
-    /// taken from the hierarchy below <see cref="RootBone"/>, following the first
-    /// child of each bone.
+    /// <see cref="FluffyBones"/> component, which owns them and steps them. The
+    /// bones are taken from the hierarchy below <see cref="RootBone"/>, following
+    /// the first child of each bone.
     /// </remarks>
     [Serializable]
     public class FluffyChain

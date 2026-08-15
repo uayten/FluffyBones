@@ -1,6 +1,6 @@
 {
   "name": "FluffyBones.Runtime",
-  "rootNamespace": "FluffyBones",
+  "rootNamespace": "Fluffy",
   "references": [],
   "includePlatforms": [],
   "excludePlatforms": [],

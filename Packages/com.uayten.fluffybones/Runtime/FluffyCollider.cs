@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FluffyBones
+namespace Fluffy
 {
     /// <summary>
     /// A collision shape that Fluffy Bones chains are pushed out of.

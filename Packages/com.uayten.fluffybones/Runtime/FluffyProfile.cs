@@ -1,10 +1,11 @@
 using UnityEngine;
 
-namespace FluffyBones
+namespace Fluffy
 {
     /// <summary>
-    /// Reusable set of tuning values for the Fluffy Bones solver — stiffness,
-    /// damping, gravity — shareable between chains and characters.
+    /// The behaviour asset: a reusable set of tuning values for the Fluffy Bones
+    /// solver — stiffness, damping, gravity. One profile can drive a single chain,
+    /// every strand of a skirt, or every character in the game.
     /// </summary>
     [CreateAssetMenu(fileName = "FluffyProfile", menuName = "Fluffy Bones/Profile")]
     public class FluffyProfile : ScriptableObject

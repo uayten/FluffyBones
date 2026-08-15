@@ -1,6 +1,6 @@
 {
   "name": "FluffyBones.Tests.Runtime",
-  "rootNamespace": "FluffyBones.Tests",
+  "rootNamespace": "Fluffy.Tests",
   "references": [
     "FluffyBones.Runtime",
     "UnityEngine.TestRunner",

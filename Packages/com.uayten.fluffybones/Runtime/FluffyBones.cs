@@ -1,23 +1,42 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FluffyBones
+namespace Fluffy
 {
+    /// <summary>How many bone chains a character drives.</summary>
+    public enum FluffyChainMode
+    {
+        /// <summary>One chain: a tail, a ponytail, a single cable.</summary>
+        Single,
+
+        /// <summary>Several chains sharing one setup: a skirt, a cape, a head of hair.</summary>
+        Multiple
+    }
+
     /// <summary>
-    /// The Fluffy Bones component. Goes on the character, holds its chains and
-    /// steps them together, so the whole character is solved in one ordered pass.
+    /// The Fluffy Bones component. Goes on the character, holds its bone chains
+    /// and steps them together, so the whole character is solved in one ordered
+    /// pass after the animation has been applied.
     /// </summary>
     /// <remarks>
-    /// Add it to the character root, press <em>Detect chains</em> to pick up the
-    /// tails, skirts and hair by bone name, or drag the root bones in by hand.
+    /// Pick <see cref="FluffyChainMode.Single"/> for one tail or ponytail, or
+    /// <see cref="FluffyChainMode.Multiple"/> for a skirt, where a dozen strands
+    /// hang off the same hips and share one profile.
     /// </remarks>
     [DisallowMultipleComponent]
-    [AddComponentMenu("Fluffy Bones/Fluffy Body")]
-    public class FluffyBody : MonoBehaviour
+    [AddComponentMenu("Fluffy Bones/Fluffy Bones")]
+    public class FluffyBones : MonoBehaviour
     {
-        [Header("Chains")]
-        [Tooltip("Bone chains this character simulates. Use Detect chains to fill it " +
-                 "from the bone names, or add entries by hand.")]
+        [Tooltip("Single: one chain, like a tail. Multiple: many chains sharing one " +
+                 "profile, like the strands of a skirt.")]
+        [SerializeField] private FluffyChainMode _mode = FluffyChainMode.Single;
+
+        [Tooltip("The behaviour asset. Reusable across chains and characters — one " +
+                 "profile can drive every skirt in the game.")]
+        [SerializeField] private FluffyProfile _profile;
+
+        [Tooltip("Bone chains this character simulates.")]
         [SerializeField] private List<FluffyChain> _chains = new List<FluffyChain>();
 
         [Tooltip("Bone names searched by Detect chains. Case is ignored, and a match " +
@@ -27,11 +46,6 @@ namespace FluffyBones
             "tail", "skirt", "hair", "ponytail", "cape", "cloak", "chain", "ribbon", "ear"
         };
 
-        [Header("Simulation")]
-        [Tooltip("Tuning used by every chain that has no override of its own. " +
-                 "With none assigned the chains fall back to their defaults.")]
-        [SerializeField] private FluffyProfile _profile;
-
         [Tooltip("How far the character may move in a single frame before the chains are " +
                  "snapped back to their rest pose instead of swinging. Keeps teleports " +
                  "from launching them across the level.")]
@@ -40,15 +54,22 @@ namespace FluffyBones
 
         private Vector3 _lastPosition;
 
-        /// <summary>Chains this character simulates.</summary>
-        public IReadOnlyList<FluffyChain> Chains => _chains;
+        /// <summary>Whether this character drives one chain or several.</summary>
+        public FluffyChainMode Mode
+        {
+            get => _mode;
+            set => _mode = value;
+        }
 
-        /// <summary>Tuning used by chains without an override.</summary>
+        /// <summary>Behaviour asset used by chains without an override of their own.</summary>
         public FluffyProfile Profile
         {
             get => _profile;
             set => _profile = value;
         }
+
+        /// <summary>Chains this character simulates.</summary>
+        public IReadOnlyList<FluffyChain> Chains => _chains;
 
         private void Awake()
         {
@@ -171,7 +192,7 @@ namespace FluffyBones
             {
                 string keyword = _detectionKeywords[i];
                 if (!string.IsNullOrEmpty(keyword)
-                    && boneName.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    && boneName.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     return true;
                 }

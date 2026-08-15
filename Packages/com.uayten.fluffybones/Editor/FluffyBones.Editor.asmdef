@@ -1,6 +1,6 @@
 {
   "name": "FluffyBones.Editor",
-  "rootNamespace": "FluffyBones.Editor",
+  "rootNamespace": "Fluffy.Editor",
   "references": [
     "FluffyBones.Runtime"
   ],

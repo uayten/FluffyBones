@@ -27,16 +27,23 @@ The path is relative to the consuming project's `Packages` folder.
 
 ## Getting started
 
-1. Add **Fluffy Body** to the character root. One component per character — not
+1. Add **Fluffy Bones** to the character root. One component per character — not
    one per bone.
-2. Press **Detect chains**. It scans the skeleton for bones whose names contain
-   `tail`, `skirt`, `hair`, `cape` and friends, and adds a chain for each one.
-   Bones that branch off a chain already found are skipped, so `tail_02` does
-   not start a second chain. Anything it misses, drag the root bone into the
-   list by hand.
-3. Press play and move the character. The bones lag behind and swing back.
-4. To tune it, create a profile — **Assets → Create → Fluffy Bones → Profile** —
-   and assign it on the body. A single chain can override it with one of its own.
+2. Choose the mode at the top:
+   - **Single** — one chain. Drag in the first bone of the tail and you are done.
+   - **Multiple** — many chains sharing one profile, which is what a skirt is.
+     Press **Detect chains** to scan the skeleton for bones named `tail`,
+     `skirt`, `hair`, `cape` and friends. Bones inside a chain already found are
+     skipped, so `tail_02` does not start a second one. Anything it misses, drag
+     the root bone into the list by hand.
+3. Assign a **profile** — the behaviour asset. **New** creates one, **Duplicate**
+   copies the current one to tweak from, and its settings are drawn right there
+   in the component, so you tune without leaving the character. With no profile
+   assigned the chains fall back to their built-in defaults.
+4. Press play and move the character. The bones lag behind and swing back.
+
+A profile is a normal asset: reuse it across chains and characters, duplicate it
+for a variant, edit it and every user updates at once.
 
 | Parameter | What it does |
 | --- | --- |
@@ -49,11 +56,13 @@ The path is relative to the consuming project's `Packages` folder.
 
 ## Contents
 
+All types live in the `Fluffy` namespace.
+
 | Type | Role |
 | --- | --- |
-| `FluffyBody` | The component. Goes on the character, owns its chains and steps them. **Working.** |
-| `FluffyChain` | One bone chain, held in a list on the body. Not a component. **Working.** |
-| `FluffyProfile` | ScriptableObject with the tuning values, shareable between chains. **Working.** |
+| `FluffyBones` | The component. Goes on the character, owns its chains and steps them. **Working.** |
+| `FluffyChain` | One bone chain, held in a list on the component. Not a component itself. **Working.** |
+| `FluffyProfile` | The behaviour asset — the tuning values, shareable and duplicable. **Working.** |
 | `FluffyCollider` | Collision shape the chains are pushed out of. *Stub.* |
 
 ## Known limitations

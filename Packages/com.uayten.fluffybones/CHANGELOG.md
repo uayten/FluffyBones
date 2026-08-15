@@ -9,11 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `FluffyBody`: the character-level component. Holds the chains, steps them in
+- `FluffyBones`: the character-level component. Holds the chains, steps them in
   one ordered pass in `LateUpdate`, and detects teleports so a character moving
   a long way in one frame does not launch its chains.
-- `FluffyBody.DetectChains`, plus a **Detect chains** button in the inspector:
+- Single / Multiple mode at the top of the component, so a tail is set up by
+  dragging one bone while a skirt gets the full list.
+- `FluffyBones.DetectChains`, plus a **Detect chains** button in the inspector:
   finds tails, skirts, hair and capes by bone name and adds a chain for each.
+- Profile slot with **New** and **Duplicate**, and the profile's settings drawn
+  inline in the component so chains are tuned without leaving the character.
 - `FluffyChain`: chains are collected from the bone hierarchy and simulated with
   Verlet integration and a rigid-length constraint, so bones lag behind the
   animated pose and swing back to it.
@@ -25,7 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Minimum supported version raised to Unity 6.
 - `FluffyChain` is no longer a `MonoBehaviour`. Chains are entries in a list on
-  `FluffyBody` instead of a component per bone.
+  the `FluffyBones` component instead of a component per bone.
+- Namespace is `Fluffy`, not `FluffyBones`. The component had to be named
+  `FluffyBones` for the inspector to read "Fluffy Bones", and a type cannot
+  share its name with the namespace holding it without breaking fully qualified
+  references for consumers.
 
 ## [0.0.1] - 2026-08-15
 
