@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
@@ -18,8 +18,6 @@ namespace Fluffy.Editor
     /// </remarks>
     public static class FluffyBoneField
     {
-        private static readonly AdvancedDropdownState DropdownState = new AdvancedDropdownState();
-
         /// <summary>Draws the bone slot on the next layout line.</summary>
         public static void Draw(GUIContent label, SerializedProperty property, Transform root)
         {
@@ -59,11 +57,21 @@ namespace Fluffy.Editor
             UnityEngine.Object target = property.serializedObject.targetObject;
             string path = property.propertyPath;
 
-            var dropdown = new BoneDropdown(DropdownState, root, bone =>
+            // A fresh state each time: a shared one remembers a selection that means
+            // nothing once the dropdown is listing a different character's bones.
+            var dropdown = new BoneDropdown(new AdvancedDropdownState(), root, bone =>
             {
                 var serialized = new SerializedObject(target);
                 serialized.FindProperty(path).objectReferenceValue = bone;
                 serialized.ApplyModifiedProperties();
+
+                // The pick lands after the inspector has finished drawing, so ask for
+                // the repaint that shows it.
+                EditorUtility.SetDirty(target);
+                foreach (UnityEditor.Editor editor in ActiveEditorTracker.sharedTracker.activeEditors)
+                {
+                    editor.Repaint();
+                }
             });
 
             dropdown.Show(rect);
@@ -136,7 +144,6 @@ namespace Fluffy.Editor
 
             private readonly Transform _root;
             private readonly Action<Transform> _onPicked;
-            private readonly List<Transform> _bones = new List<Transform>();
 
             public BoneDropdown(AdvancedDropdownState state, Transform root, Action<Transform> onPicked)
                 : base(state)
@@ -148,11 +155,9 @@ namespace Fluffy.Editor
 
             protected override AdvancedDropdownItem BuildRoot()
             {
-                _bones.Clear();
-
                 var root = new AdvancedDropdownItem("Bones");
-                _bones.Add(null);
-                root.AddChild(new AdvancedDropdownItem("None") { id = 0 });
+
+                root.AddChild(new BoneItem("None", null));
                 root.AddSeparator();
 
                 AddBone(root, _root, 0);
@@ -161,8 +166,7 @@ namespace Fluffy.Editor
 
             private void AddBone(AdvancedDropdownItem parent, Transform bone, int depth)
             {
-                parent.AddChild(new AdvancedDropdownItem(RepeatIndent(depth) + bone.name) { id = _bones.Count });
-                _bones.Add(bone);
+                parent.AddChild(new BoneItem(RepeatIndent(depth) + bone.name, bone));
 
                 for (int i = 0; i < bone.childCount; i++)
                 {
@@ -172,16 +176,35 @@ namespace Fluffy.Editor
 
             private static string RepeatIndent(int depth)
             {
-                return depth <= 0 ? string.Empty : string.Concat(System.Linq.Enumerable.Repeat(Indent, depth));
+                return depth <= 0 ? string.Empty : string.Concat(Enumerable.Repeat(Indent, depth));
             }
 
             protected override void ItemSelected(AdvancedDropdownItem item)
             {
-                if (item.id >= 0 && item.id < _bones.Count)
+                if (item is BoneItem bone)
                 {
-                    _onPicked?.Invoke(_bones[item.id]);
+                    _onPicked?.Invoke(bone.Bone);
                 }
             }
+        }
+
+        /// <summary>
+        /// A dropdown row that carries its bone.
+        /// </summary>
+        /// <remarks>
+        /// <c>AdvancedDropdownItem.id</c> is reassigned while the dropdown builds its
+        /// tree, so an id set here does not survive to <c>ItemSelected</c> — looking
+        /// the bone up by it silently picks nothing. The reference rides along instead.
+        /// </remarks>
+        private class BoneItem : AdvancedDropdownItem
+        {
+            public BoneItem(string name, Transform bone) : base(name)
+            {
+                Bone = bone;
+            }
+
+            /// <summary>The bone this row picks, or null for the None row.</summary>
+            public Transform Bone { get; }
         }
     }
 }
