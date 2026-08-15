@@ -60,6 +60,7 @@ namespace Fluffy.Editor
         private UnityEditor.Editor _profileEditor;
         private SerializedObject _poseSerialized;
         private bool _showAdvanced;
+        private bool _showLimits;
         private int _editingChain;
 
         private void OnEnable()
@@ -253,22 +254,99 @@ namespace Fluffy.Editor
 
             // With an asset assigned, the rows edit the asset — which is what lets eight
             // skirt strands share one pose and be posed once.
-            SerializedObject owner = ResolvePoseOwner(poseAsset, out SerializedProperty rotations, chain);
+            SerializedObject owner = ResolvePoseOwner(poseAsset, out SerializedProperty pose, chain);
             owner.Update();
 
-            SeedRotations(rotations, bones);
+            SeedPose(pose, bones);
 
             using (new EditorGUI.IndentLevelScope())
             {
-                for (int i = 0; i < bones.Count; i++)
+                for (int i = 0; i < pose.arraySize; i++)
                 {
-                    DrawBoneRotation(rotations.GetArrayElementAtIndex(i), bones[i]);
+                    SerializedProperty rotation = pose.GetArrayElementAtIndex(i)
+                        .FindPropertyRelative(nameof(FluffyBonePose.Rotation));
+
+                    if (i < bones.Count)
+                    {
+                        DrawBoneRotation(rotation, bones[i].name, bones[i]);
+                        continue;
+                    }
+
+                    // Entries past the end of this chain: a pose written for a longer one.
+                    // Shown greyed rather than hidden, so it is clear why the file is
+                    // bigger than the chain.
+                    using (new EditorGUI.DisabledScope(true))
+                    {
+                        DrawBoneRotation(rotation, $"(unused {i + 1})");
+                    }
                 }
             }
+
+            DrawTrimButton(pose, bones.Count, owner);
+            DrawAngleLimits(pose, bones);
 
             if (owner != serializedObject)
             {
                 owner.ApplyModifiedProperties();
+            }
+        }
+
+        /// <summary>
+        /// Offers to drop the entries a shorter chain cannot use, and writes the file
+        /// back out.
+        /// </summary>
+        private static void DrawTrimButton(SerializedProperty pose, int boneCount, SerializedObject owner)
+        {
+            int extra = pose.arraySize - boneCount;
+            if (extra <= 0)
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                $"This pose describes {pose.arraySize} bones and the chain has {boneCount}. "
+                + "The first ones are used and the rest are ignored.",
+                MessageType.None);
+
+            if (!GUILayout.Button($"Remove the {extra} unused entr{(extra == 1 ? "y" : "ies")}"))
+            {
+                return;
+            }
+
+            pose.arraySize = boneCount;
+            owner.ApplyModifiedProperties();
+            AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>
+        /// How far each bone may swing from the pose. Its own section rather than a
+        /// fourth column, which would leave every row too narrow to read.
+        /// </summary>
+        private void DrawAngleLimits(SerializedProperty pose, List<Transform> bones)
+        {
+            EditorGUILayout.Space();
+
+            _showLimits = EditorGUILayout.Foldout(_showLimits, "Angle Limits", true);
+            if (!_showLimits)
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                "How far each bone may swing away from its pose. 180 lets it go anywhere; "
+                + "lower values keep a skirt from folding through a leg.",
+                MessageType.None);
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                int count = Mathf.Min(pose.arraySize, bones.Count);
+                for (int i = 0; i < count; i++)
+                {
+                    SerializedProperty limit = pose.GetArrayElementAtIndex(i)
+                        .FindPropertyRelative(nameof(FluffyBonePose.AngleLimit));
+
+                    EditorGUILayout.PropertyField(limit, new GUIContent(bones[i].name));
+                }
             }
         }
 
@@ -298,12 +376,12 @@ namespace Fluffy.Editor
         /// assigned, otherwise the component itself.
         /// </summary>
         private SerializedObject ResolvePoseOwner(
-            SerializedProperty poseAsset, out SerializedProperty rotations, SerializedProperty chain)
+            SerializedProperty poseAsset, out SerializedProperty pose, SerializedProperty chain)
         {
             var asset = poseAsset.objectReferenceValue as FluffyPose;
             if (asset == null)
             {
-                rotations = chain.FindPropertyRelative("_defaultPoseRotations");
+                pose = chain.FindPropertyRelative("_defaultPose");
                 return serializedObject;
             }
 
@@ -312,26 +390,31 @@ namespace Fluffy.Editor
                 _poseSerialized = new SerializedObject(asset);
             }
 
-            rotations = _poseSerialized.FindProperty("_rotations");
+            pose = _poseSerialized.FindProperty("_bones");
             return _poseSerialized;
         }
 
         /// <summary>
-        /// Fills the rotation list from the scene when it does not match the chain, so
-        /// the fields always show real rotations rather than zeros.
+        /// Fills in entries for bones the pose does not cover yet, reading them off the
+        /// scene so the fields show real rotations rather than zeros. Entries beyond the
+        /// chain are left alone — a pose written for a longer chain stays intact.
         /// </summary>
-        private static void SeedRotations(SerializedProperty rotations, List<Transform> bones)
+        private static void SeedPose(SerializedProperty pose, List<Transform> bones)
         {
-            if (rotations.arraySize == bones.Count)
+            if (pose.arraySize >= bones.Count)
             {
                 return;
             }
 
-            rotations.arraySize = bones.Count;
-            for (int i = 0; i < bones.Count; i++)
+            int first = pose.arraySize;
+            pose.arraySize = bones.Count;
+
+            for (int i = first; i < bones.Count; i++)
             {
-                rotations.GetArrayElementAtIndex(i).vector3Value =
+                SerializedProperty entry = pose.GetArrayElementAtIndex(i);
+                entry.FindPropertyRelative(nameof(FluffyBonePose.Rotation)).vector3Value =
                     NormalizeEuler(bones[i].localRotation.eulerAngles);
+                entry.FindPropertyRelative(nameof(FluffyBonePose.AngleLimit)).floatValue = FluffyBonePose.Free;
             }
         }
 
@@ -385,7 +468,7 @@ namespace Fluffy.Editor
             return EditorGUILayout.Popup(new GUIContent("Editing Chain"), index, names);
         }
 
-        private static void DrawBoneRotation(SerializedProperty rotation, Transform bone)
+        private static void DrawBoneRotation(SerializedProperty rotation, string label, Transform bone = null)
         {
             Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
 
@@ -396,7 +479,7 @@ namespace Fluffy.Editor
             EditorGUI.indentLevel = 0;
 
             var nameRect = new Rect(row.x, row.y, BoneLabelWidth, row.height);
-            EditorGUI.LabelField(nameRect, bone.name, EditorStyles.label);
+            EditorGUI.LabelField(nameRect, label, EditorStyles.label);
 
             var fields = new Rect(row.x + BoneLabelWidth, row.y, row.width - BoneLabelWidth, row.height);
             float width = (fields.width - AxisSpacing * 2f) / 3f;
@@ -417,6 +500,11 @@ namespace Fluffy.Editor
             }
 
             rotation.vector3Value = euler;
+
+            if (bone == null)
+            {
+                return;
+            }
 
             // Move the bone now rather than waiting for the next rebuild, so the scene
             // view follows the field while it is being dragged.

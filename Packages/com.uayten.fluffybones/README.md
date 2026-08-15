@@ -81,12 +81,16 @@ In Multiple mode an **Editing Chain** dropdown picks which chain the list is
 showing.
 
 Posing eight skirt strands one at a time would be miserable, so there are two
-ways out. Assign a **Pose Asset** and the chain reads its rotations from that
-file — rotations are local, so one asset fits every chain with the same bone
-count, and giving all eight strands the same asset means posing them once.
-**Copy this chain's setup to the others** pushes the current chain's pose asset,
-dummy bone settings and profile override onto every other chain in one press;
-start and last bones are left alone, since those belong to the strand.
+ways out. Assign a **Pose Asset** and the chain reads from that file — rotations
+are local, so giving all eight strands the same asset poses them once. **Copy
+this chain's setup to the others** pushes the current chain's pose asset, dummy
+bone settings and profile override onto every other chain in one press; start
+and last bones are left alone, since those belong to the strand.
+
+A pose does not have to match the chain's length. Its entries are handed to the
+bones in order, so a pose written for ten bones drives the first three of a
+three-bone tail and the rest are ignored. Those extra entries show greyed in the
+list, with a button to drop them and write the file back out.
 
 With no pose asset the rotations live on the component, so the model file is
 untouched and two characters sharing one mesh can rest differently.
@@ -96,6 +100,17 @@ the shape a skeleton is normally drawn with. It is there so posing does not need
 a separate bone renderer component — Fluffy Bones has no dependency on Animation
 Rigging or anything else. **Show Axes** adds each bone's local axes, X red, Y
 green, Z blue.
+
+## Angle limits
+
+Under **Angle Limits**, each bone gets a cap on how far it may swing away from
+its pose, in degrees. 180 lets it go anywhere, which is the default; 0 pins it to
+the pose. Lower values on the upper bones of a skirt are what keep a strand from
+folding through a leg.
+
+The limits live in the same pose asset as the rotations, so they are shared and
+copied along with them. They are per bone rather than per profile because a limit
+describes the rig — where the leg is — while a profile describes feel.
 
 ## The dummy bone
 

@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spare bone. It draws faded.
 - `FluffyPose`, a saved pose asset. Rotations are local, so one asset fits every
   chain with the same bone count and the eight strands of a skirt are posed once.
+  A pose longer than the chain hands its first entries to the bones that exist;
+  the extras show greyed, with a button to drop them and save the file.
+- **Angle Limits**: a per-bone cap, in degrees, on how far a bone may swing from
+  its pose. 180 is free, 0 pins it. Stored in the pose asset beside the
+  rotations, so it is shared and copied with them.
 - **Copy this chain's setup to the others**: pushes one chain's pose asset, dummy
   bone settings and profile override onto every other chain, leaving their start
   and last bones alone.

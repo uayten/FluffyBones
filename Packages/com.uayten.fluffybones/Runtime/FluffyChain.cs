@@ -51,9 +51,9 @@ namespace Fluffy
                  "this chain alone.")]
         [SerializeField] private FluffyPose _pose;
 
-        [Tooltip("The local rotation each bone rests at, as euler angles. Used when no " +
-                 "pose asset is assigned.")]
-        [SerializeField] private Vector3[] _defaultPoseRotations;
+        [Tooltip("What each bone rests at and how far it may swing. Used when no pose " +
+                 "asset is assigned.")]
+        [SerializeField] private FluffyBonePose[] _defaultPose;
 
         private readonly List<Joint> _joints = new List<Joint>();
         private bool _isBuilt;
@@ -157,6 +157,7 @@ namespace Fluffy
                 _joints.Add(new Joint
                 {
                     Transform = bone,
+                    AngleLimit = ResolveAngleLimit(i),
                     RestLocalRotation = restRotations[i],
                     BoneAxis = Quaternion.Inverse(bone.rotation) * ((tip - bone.position) / length),
                     Length = length,
@@ -236,9 +237,21 @@ namespace Fluffy
                 // of its own rest length around the bone's head.
                 Vector3 offset = nextTip - position;
                 float distance = offset.magnitude;
-                nextTip = distance < MinBoneLength
-                    ? position + restDirection * joint.Length
-                    : position + offset * (joint.Length / distance);
+                Vector3 direction = distance < MinBoneLength ? restDirection : offset / distance;
+
+                if (joint.AngleLimit < FluffyBonePose.Free)
+                {
+                    // Pull the direction back towards the rest pose until it is inside the
+                    // cone the bone is allowed to move in.
+                    float swing = Vector3.Angle(restDirection, direction);
+                    if (swing > joint.AngleLimit)
+                    {
+                        direction = Vector3.RotateTowards(
+                            restDirection, direction, joint.AngleLimit * Mathf.Deg2Rad, 0f);
+                    }
+                }
+
+                nextTip = position + direction * joint.Length;
 
                 joint.PreviousTip = joint.CurrentTip;
                 joint.CurrentTip = nextTip;
@@ -397,20 +410,28 @@ namespace Fluffy
             }
 
             List<Transform> bones = CollectChain(_startBone, _lastBone);
-            var rotations = new Vector3[bones.Count];
+            FluffyBonePose[] existing = PoseData;
+            var captured = new FluffyBonePose[bones.Count];
 
             for (int i = 0; i < bones.Count; i++)
             {
-                rotations[i] = bones[i].localRotation.eulerAngles;
+                captured[i] = new FluffyBonePose(bones[i].localRotation.eulerAngles)
+                {
+                    // Capture reads rotations off the scene; the limits were authored and
+                    // have nothing to do with where the bones happen to be.
+                    AngleLimit = existing != null && i < existing.Length
+                        ? existing[i].AngleLimit
+                        : FluffyBonePose.Free
+                };
             }
 
             if (_pose != null)
             {
-                _pose.SetRotations(rotations);
+                _pose.SetBones(captured);
             }
             else
             {
-                _defaultPoseRotations = rotations;
+                _defaultPose = captured;
             }
 
             return true;
@@ -432,11 +453,18 @@ namespace Fluffy
         /// <summary>Forgets the authored pose, going back to the one the model was imported with.</summary>
         public void ClearDefaultPose()
         {
-            _defaultPoseRotations = null;
+            _defaultPose = null;
         }
 
         /// <summary>Whether this chain has an authored default pose.</summary>
-        public bool HasDefaultPose => PoseRotations != null && PoseRotations.Length > 0;
+        public bool HasDefaultPose => PoseData != null && PoseData.Length > 0;
+
+        /// <summary>How far the bone at <paramref name="index"/> may swing, in degrees.</summary>
+        private float ResolveAngleLimit(int index)
+        {
+            FluffyBonePose[] pose = PoseData;
+            return pose != null && index < pose.Length ? pose[index].AngleLimit : FluffyBonePose.Free;
+        }
 
         /// <summary>
         /// Copies this chain's shared pose and dummy bone settings onto another, so a
@@ -456,9 +484,9 @@ namespace Fluffy
             other._dummyLength = _dummyLength;
             other._profileOverride = _profileOverride;
 
-            if (_pose == null && _defaultPoseRotations != null)
+            if (_pose == null && _defaultPose != null)
             {
-                other._defaultPoseRotations = (Vector3[])_defaultPoseRotations.Clone();
+                other._defaultPose = (FluffyBonePose[])_defaultPose.Clone();
             }
         }
 
@@ -491,13 +519,15 @@ namespace Fluffy
         /// </summary>
         private Quaternion[] ResolveRestRotations(List<Transform> bones)
         {
-            Vector3[] pose = PoseRotations;
-            bool poseFits = pose != null && pose.Length == bones.Count;
+            FluffyBonePose[] pose = PoseData;
+            int posed = pose == null ? 0 : Mathf.Min(pose.Length, bones.Count);
             var rotations = new Quaternion[bones.Count];
 
             for (int i = 0; i < bones.Count; i++)
             {
-                rotations[i] = poseFits ? Quaternion.Euler(pose[i]) : bones[i].localRotation;
+                // A pose longer than the chain hands its first entries to the bones that
+                // exist; a shorter one leaves the rest where the model put them.
+                rotations[i] = i < posed ? Quaternion.Euler(pose[i].Rotation) : bones[i].localRotation;
             }
 
             return rotations;
@@ -584,8 +614,8 @@ namespace Fluffy
             return index == bones.Count - 1 && (!_autoDummyLength || bones[index].childCount == 0);
         }
 
-        /// <summary>The rotations the chain rests at: the shared pose when there is one.</summary>
-        private Vector3[] PoseRotations => _pose != null ? _pose.Rotations : _defaultPoseRotations;
+        /// <summary>What the chain rests at: the shared pose when there is one.</summary>
+        private FluffyBonePose[] PoseData => _pose != null ? _pose.Bones : _defaultPose;
 
         /// <summary>Per-bone simulation state, cached at build time.</summary>
         private class Joint
@@ -601,6 +631,9 @@ namespace Fluffy
 
             /// <summary>Rest distance from the bone's head to its tip, in world units.</summary>
             public float Length;
+
+            /// <summary>How far the bone may swing from its rest direction, in degrees.</summary>
+            public float AngleLimit;
 
             /// <summary>Position along the chain: 0 at the root, 1 at the tip.</summary>
             public float NormalizedDepth;
