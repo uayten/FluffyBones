@@ -22,46 +22,62 @@ namespace Fluffy.Editor
             new GUIContent("Profile Override", "Tuning for this chain alone. "
                                                + "Empty falls back to the character's profile.");
 
-        private static readonly GUIContent TipLabel =
-            new GUIContent("Tip Bone Length", "A bone in a game engine is a single point, so "
-                                              + "the last one has no length. This stands in for it. "
-                                              + "Auto measures it from the rig.");
+        private static readonly GUIContent DummyLabel =
+            new GUIContent("Dummy Bone", "Invent a bone past the end of the chain, so the last "
+                                         + "real bone has something to swing towards. Rigs that "
+                                         + "already end in a spare bone do not need it.");
+
+        private static readonly GUIContent DummyLengthLabel =
+            new GUIContent("Dummy Bone Length", "A bone in a game engine is a single point, so "
+                                                + "the last one has no length. This stands in for it. "
+                                                + "Auto measures it from the rig.");
 
         private const float AutoToggleWidth = 54f;
+        private const int ExpandedLines = 6;
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
             float line = EditorGUIUtility.singleLineHeight;
             float spacing = EditorGUIUtility.standardVerticalSpacing;
 
-            return property.isExpanded ? line * 5f + spacing * 5f : line;
+            return property.isExpanded ? line * ExpandedLines + spacing * ExpandedLines : line;
         }
 
         /// <summary>
-        /// The tip bone row: a length with an Auto toggle beside it. Shared with the
-        /// component's Single mode, so both draw the same control.
+        /// The dummy bone toggle. Shared with the component's Single mode, so both draw
+        /// the same control.
         /// </summary>
-        public static void DrawTipBone(Rect position, SerializedProperty chain)
+        public static void DrawDummyToggle(Rect position, SerializedProperty chain)
         {
-            SerializedProperty auto = chain.FindPropertyRelative("_autoTipLength");
-            SerializedProperty length = chain.FindPropertyRelative("_tipLength");
+            EditorGUI.PropertyField(position, chain.FindPropertyRelative("_useDummyBone"), DummyLabel);
+        }
 
-            Rect field = EditorGUI.PrefixLabel(position, TipLabel);
-            var lengthRect = new Rect(field.x, field.y, Mathf.Max(0f, field.width - AutoToggleWidth), field.height);
-            var toggleRect = new Rect(field.xMax - AutoToggleWidth + 4f, field.y, AutoToggleWidth, field.height);
+        /// <summary>The dummy bone's length, with an Auto toggle beside it.</summary>
+        public static void DrawDummyLength(Rect position, SerializedProperty chain)
+        {
+            SerializedProperty use = chain.FindPropertyRelative("_useDummyBone");
+            SerializedProperty auto = chain.FindPropertyRelative("_autoDummyLength");
+            SerializedProperty length = chain.FindPropertyRelative("_dummyLength");
 
-            // PrefixLabel already consumed the indent; leaving it on would shift the
-            // controls a second time.
-            int indent = EditorGUI.indentLevel;
-            EditorGUI.indentLevel = 0;
-
-            using (new EditorGUI.DisabledScope(auto.boolValue))
+            using (new EditorGUI.DisabledScope(!use.boolValue))
             {
-                EditorGUI.PropertyField(lengthRect, length, GUIContent.none);
-            }
+                Rect field = EditorGUI.PrefixLabel(position, DummyLengthLabel);
+                var lengthRect = new Rect(field.x, field.y, Mathf.Max(0f, field.width - AutoToggleWidth), field.height);
+                var toggleRect = new Rect(field.xMax - AutoToggleWidth + 4f, field.y, AutoToggleWidth, field.height);
 
-            auto.boolValue = EditorGUI.ToggleLeft(toggleRect, "Auto", auto.boolValue);
-            EditorGUI.indentLevel = indent;
+                // PrefixLabel already consumed the indent; leaving it on would shift the
+                // controls a second time.
+                int indent = EditorGUI.indentLevel;
+                EditorGUI.indentLevel = 0;
+
+                using (new EditorGUI.DisabledScope(auto.boolValue))
+                {
+                    EditorGUI.PropertyField(lengthRect, length, GUIContent.none);
+                }
+
+                auto.boolValue = EditorGUI.ToggleLeft(toggleRect, "Auto", auto.boolValue);
+                EditorGUI.indentLevel = indent;
+            }
         }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -97,7 +113,10 @@ namespace Fluffy.Editor
                 FluffyBoneField.Draw(row, LastBoneLabel, last, root);
 
                 row.y += line + spacing;
-                DrawTipBone(row, property);
+                DrawDummyToggle(row, property);
+
+                row.y += line + spacing;
+                DrawDummyLength(row, property);
 
                 row.y += line + spacing;
                 EditorGUI.PropertyField(row, profileOverride, ProfileLabel);

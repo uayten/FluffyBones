@@ -58,6 +58,7 @@ namespace Fluffy.Editor
         private SerializedProperty _boneColor;
 
         private UnityEditor.Editor _profileEditor;
+        private SerializedObject _poseSerialized;
         private bool _showAdvanced;
         private int _editingChain;
 
@@ -80,6 +81,9 @@ namespace Fluffy.Editor
                 DestroyImmediate(_profileEditor);
                 _profileEditor = null;
             }
+
+            _poseSerialized?.Dispose();
+            _poseSerialized = null;
         }
 
         public override void OnInspectorGUI()
@@ -159,7 +163,8 @@ namespace Fluffy.Editor
                 chain.FindPropertyRelative("_lastBone"),
                 character);
 
-            FluffyChainDrawer.DrawTipBone(EditorGUILayout.GetControlRect(), chain);
+            FluffyChainDrawer.DrawDummyToggle(EditorGUILayout.GetControlRect(), chain);
+            FluffyChainDrawer.DrawDummyLength(EditorGUILayout.GetControlRect(), chain);
         }
 
         private void DrawMultipleChains()
@@ -242,26 +247,127 @@ namespace Fluffy.Editor
             }
 
             List<Transform> bones = FluffyChain.CollectChain(startBone, lastBone);
-            SerializedProperty pose = chain.FindPropertyRelative("_defaultPoseRotations");
+            SerializedProperty poseAsset = chain.FindPropertyRelative("_pose");
 
-            // Seed from the scene the first time, and whenever the chain changes length,
-            // so the fields always show real rotations rather than zeros.
-            if (pose.arraySize != bones.Count)
-            {
-                pose.arraySize = bones.Count;
-                for (int i = 0; i < bones.Count; i++)
-                {
-                    pose.GetArrayElementAtIndex(i).vector3Value = NormalizeEuler(bones[i].localRotation.eulerAngles);
-                }
-            }
+            DrawPoseAsset(poseAsset);
+
+            // With an asset assigned, the rows edit the asset — which is what lets eight
+            // skirt strands share one pose and be posed once.
+            SerializedObject owner = ResolvePoseOwner(poseAsset, out SerializedProperty rotations, chain);
+            owner.Update();
+
+            SeedRotations(rotations, bones);
 
             using (new EditorGUI.IndentLevelScope())
             {
                 for (int i = 0; i < bones.Count; i++)
                 {
-                    DrawBoneRotation(pose.GetArrayElementAtIndex(i), bones[i]);
+                    DrawBoneRotation(rotations.GetArrayElementAtIndex(i), bones[i]);
                 }
             }
+
+            if (owner != serializedObject)
+            {
+                owner.ApplyModifiedProperties();
+            }
+        }
+
+        private void DrawPoseAsset(SerializedProperty poseAsset)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.PropertyField(poseAsset, new GUIContent(
+                    "Pose Asset",
+                    "A saved pose, shared with other chains. Rotations are local, so one "
+                    + "asset fits every chain with the same bone count."));
+
+                if (GUILayout.Button("New", GUILayout.Width(46f)))
+                {
+                    CreatePoseAsset(poseAsset);
+                }
+            }
+
+            if (_chains.arraySize > 1 && GUILayout.Button("Copy this chain's setup to the others"))
+            {
+                CopySettingsToAllChains();
+            }
+        }
+
+        /// <summary>
+        /// Whichever object holds the rotations being edited: the pose asset when one is
+        /// assigned, otherwise the component itself.
+        /// </summary>
+        private SerializedObject ResolvePoseOwner(
+            SerializedProperty poseAsset, out SerializedProperty rotations, SerializedProperty chain)
+        {
+            var asset = poseAsset.objectReferenceValue as FluffyPose;
+            if (asset == null)
+            {
+                rotations = chain.FindPropertyRelative("_defaultPoseRotations");
+                return serializedObject;
+            }
+
+            if (_poseSerialized == null || _poseSerialized.targetObject != asset)
+            {
+                _poseSerialized = new SerializedObject(asset);
+            }
+
+            rotations = _poseSerialized.FindProperty("_rotations");
+            return _poseSerialized;
+        }
+
+        /// <summary>
+        /// Fills the rotation list from the scene when it does not match the chain, so
+        /// the fields always show real rotations rather than zeros.
+        /// </summary>
+        private static void SeedRotations(SerializedProperty rotations, List<Transform> bones)
+        {
+            if (rotations.arraySize == bones.Count)
+            {
+                return;
+            }
+
+            rotations.arraySize = bones.Count;
+            for (int i = 0; i < bones.Count; i++)
+            {
+                rotations.GetArrayElementAtIndex(i).vector3Value =
+                    NormalizeEuler(bones[i].localRotation.eulerAngles);
+            }
+        }
+
+        private void CreatePoseAsset(SerializedProperty poseAsset)
+        {
+            string path = EditorUtility.SaveFilePanelInProject(
+                "New Fluffy Pose",
+                "FluffyPose",
+                "asset",
+                "Where should the pose be saved?",
+                ProfileFolderHint);
+
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            var pose = CreateInstance<FluffyPose>();
+            AssetDatabase.CreateAsset(pose, path);
+            AssetDatabase.SaveAssets();
+
+            poseAsset.objectReferenceValue = pose;
+        }
+
+        private void CopySettingsToAllChains()
+        {
+            var body = (FluffyBones)target;
+
+            serializedObject.ApplyModifiedProperties();
+            Undo.RecordObject(body, "Copy Fluffy Chain Setup");
+
+            int changed = body.CopySettingsToAllChains(_editingChain);
+            EditorUtility.SetDirty(body);
+            serializedObject.Update();
+
+            Debug.Log($"[Fluffy Bones] Copied the setup onto {changed} other chain(s) on '{body.name}'.", body);
         }
 
         private int DrawChainSelector()

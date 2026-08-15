@@ -33,10 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   octahedra, so posing needs no separate bone renderer. Colour is configurable,
   and the package still depends on nothing. **Show Axes** draws each bone's local
   axes alongside them.
-- **Tip Bone Length** on the chain, with an Auto toggle. A game engine bone is a
-  single point with no length of its own, so the end of a chain needs a tip
-  invented for it; Auto measures one from the rig, and turning it off sets the
-  length by hand. The invented tip draws faded.
+- **Dummy Bone** on the chain, with its own toggle and an Auto length. A game
+  engine bone is a single point with no length of its own, so the end of a chain
+  needs one invented for it; Auto measures it from the rig, and turning Auto off
+  sets the length by hand. Turning the dummy off suits rigs that already end in a
+  spare bone. It draws faded.
+- `FluffyPose`, a saved pose asset. Rotations are local, so one asset fits every
+  chain with the same bone count and the eight strands of a skirt are posed once.
+- **Copy this chain's setup to the others**: pushes one chain's pose asset, dummy
+  bone settings and profile override onto every other chain, leaving their start
+  and last bones alone.
 
 ### Changed in this release
 

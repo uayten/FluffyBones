@@ -29,21 +29,30 @@ namespace Fluffy
                  "the end of the hierarchy.")]
         [SerializeField] private Transform _lastBone;
 
-        [Tooltip("Work out the tip bone's length instead of setting it: the bone below " +
-                 "the chain when the rig has one, otherwise the length of the bone before it.")]
-        [SerializeField] private bool _autoTipLength = true;
+        [Tooltip("Invent a bone past the end of the chain, so the last real bone has " +
+                 "something to swing towards. Rigs that already end in a spare bone do " +
+                 "not need it.")]
+        [SerializeField] private bool _useDummyBone = true;
 
-        [Tooltip("Length of the tip bone, in world units. A bone in a game engine is a " +
+        [Tooltip("Work out the dummy bone's length instead of setting it: the bone below " +
+                 "the chain when the rig has one, otherwise the length of the bone before it.")]
+        [SerializeField] private bool _autoDummyLength = true;
+
+        [Tooltip("Length of the dummy bone, in world units. A bone in a game engine is a " +
                  "single point, so the last one has no length of its own — this stands in " +
                  "for the head-to-tail a bone has in Blender.")]
         [Min(0f)]
-        [SerializeField] private float _tipLength = 0.1f;
+        [SerializeField] private float _dummyLength = 0.1f;
 
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
 
-        [Tooltip("The local rotation each bone rests at, as euler angles. Empty means " +
-                 "the pose the model was imported with.")]
+        [Tooltip("A saved pose, shared with other chains. Empty keeps the rotations on " +
+                 "this chain alone.")]
+        [SerializeField] private FluffyPose _pose;
+
+        [Tooltip("The local rotation each bone rests at, as euler angles. Used when no " +
+                 "pose asset is assigned.")]
         [SerializeField] private Vector3[] _defaultPoseRotations;
 
         private readonly List<Joint> _joints = new List<Joint>();
@@ -128,6 +137,13 @@ namespace Fluffy
 
             for (int i = 0; i < bones.Count; i++)
             {
+                if (!_useDummyBone && HasVirtualTip(bones, i))
+                {
+                    // Without a dummy bone this one has nothing to aim at, so it is left
+                    // to follow its parent rather than being simulated.
+                    continue;
+                }
+
                 Transform bone = bones[i];
                 Vector3 tip = ResolveTip(bones, i);
                 float length = Vector3.Distance(bone.position, tip);
@@ -248,9 +264,15 @@ namespace Fluffy
 
             for (int i = 0; i < bones.Count; i++)
             {
-                // The invented tip is drawn faded, so it reads as a stand-in rather than
+                bool virtualTip = HasVirtualTip(bones, i);
+                if (virtualTip && !_useDummyBone)
+                {
+                    continue;
+                }
+
+                // The dummy bone is drawn faded, so it reads as a stand-in rather than
                 // a bone the rig actually has.
-                Gizmos.color = HasVirtualTip(bones, i) ? new Color(color.r, color.g, color.b, color.a * 0.45f) : color;
+                Gizmos.color = virtualTip ? new Color(color.r, color.g, color.b, color.a * 0.45f) : color;
                 DrawBone(bones[i].position, ResolveTip(bones, i));
             }
 
@@ -375,14 +397,30 @@ namespace Fluffy
             }
 
             List<Transform> bones = CollectChain(_startBone, _lastBone);
-            _defaultPoseRotations = new Vector3[bones.Count];
+            var rotations = new Vector3[bones.Count];
 
             for (int i = 0; i < bones.Count; i++)
             {
-                _defaultPoseRotations[i] = bones[i].localRotation.eulerAngles;
+                rotations[i] = bones[i].localRotation.eulerAngles;
+            }
+
+            if (_pose != null)
+            {
+                _pose.SetRotations(rotations);
+            }
+            else
+            {
+                _defaultPoseRotations = rotations;
             }
 
             return true;
+        }
+
+        /// <summary>The saved pose this chain reads from, or null when it keeps its own.</summary>
+        public FluffyPose Pose
+        {
+            get => _pose;
+            set => _pose = value;
         }
 
         /// <summary>The bones this chain covers, root first, or null without a start bone.</summary>
@@ -398,7 +436,31 @@ namespace Fluffy
         }
 
         /// <summary>Whether this chain has an authored default pose.</summary>
-        public bool HasDefaultPose => _defaultPoseRotations != null && _defaultPoseRotations.Length > 0;
+        public bool HasDefaultPose => PoseRotations != null && PoseRotations.Length > 0;
+
+        /// <summary>
+        /// Copies this chain's shared pose and dummy bone settings onto another, so a
+        /// skirt is set up once instead of once per strand. Start and last bones are
+        /// left alone — those belong to the strand.
+        /// </summary>
+        public void CopySettingsTo(FluffyChain other)
+        {
+            if (other == null || other == this)
+            {
+                return;
+            }
+
+            other._pose = _pose;
+            other._useDummyBone = _useDummyBone;
+            other._autoDummyLength = _autoDummyLength;
+            other._dummyLength = _dummyLength;
+            other._profileOverride = _profileOverride;
+
+            if (_pose == null && _defaultPoseRotations != null)
+            {
+                other._defaultPoseRotations = (Vector3[])_defaultPoseRotations.Clone();
+            }
+        }
 
         /// <summary>
         /// Puts the bones back into the authored pose. Useful in the editor after play
@@ -429,12 +491,13 @@ namespace Fluffy
         /// </summary>
         private Quaternion[] ResolveRestRotations(List<Transform> bones)
         {
-            bool poseFits = _defaultPoseRotations != null && _defaultPoseRotations.Length == bones.Count;
+            Vector3[] pose = PoseRotations;
+            bool poseFits = pose != null && pose.Length == bones.Count;
             var rotations = new Quaternion[bones.Count];
 
             for (int i = 0; i < bones.Count; i++)
             {
-                rotations[i] = poseFits ? Quaternion.Euler(_defaultPoseRotations[i]) : bones[i].localRotation;
+                rotations[i] = poseFits ? Quaternion.Euler(pose[i]) : bones[i].localRotation;
             }
 
             return rotations;
@@ -485,9 +548,9 @@ namespace Fluffy
                 return bones[index + 1].position;
             }
 
-            if (!_autoTipLength)
+            if (!_autoDummyLength)
             {
-                return bone.position + TipDirection(bones, index) * _tipLength;
+                return bone.position + TipDirection(bones, index) * _dummyLength;
             }
 
             if (bone.childCount > 0)
@@ -518,8 +581,11 @@ namespace Fluffy
         /// <summary>Whether the bone at <paramref name="index"/> ends in an invented tip.</summary>
         private bool HasVirtualTip(List<Transform> bones, int index)
         {
-            return index == bones.Count - 1 && (!_autoTipLength || bones[index].childCount == 0);
+            return index == bones.Count - 1 && (!_autoDummyLength || bones[index].childCount == 0);
         }
+
+        /// <summary>The rotations the chain rests at: the shared pose when there is one.</summary>
+        private Vector3[] PoseRotations => _pose != null ? _pose.Rotations : _defaultPoseRotations;
 
         /// <summary>Per-bone simulation state, cached at build time.</summary>
         private class Joint

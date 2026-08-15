@@ -78,10 +78,18 @@ the stored pose back onto the bones after play mode or an animation has moved
 them.
 
 In Multiple mode an **Editing Chain** dropdown picks which chain the list is
-showing, so a skirt is posed one strand at a time.
+showing.
 
-The rotations are stored on the component, so the model file is untouched and two
-characters sharing one mesh can rest differently.
+Posing eight skirt strands one at a time would be miserable, so there are two
+ways out. Assign a **Pose Asset** and the chain reads its rotations from that
+file — rotations are local, so one asset fits every chain with the same bone
+count, and giving all eight strands the same asset means posing them once.
+**Copy this chain's setup to the others** pushes the current chain's pose asset,
+dummy bone settings and profile override onto every other chain in one press;
+start and last bones are left alone, since those belong to the strand.
+
+With no pose asset the rotations live on the component, so the model file is
+untouched and two characters sharing one mesh can rest differently.
 
 **Show Bones** draws the chain's bones in the scene view as wireframe octahedra,
 the shape a skeleton is normally drawn with. It is there so posing does not need
@@ -89,21 +97,25 @@ a separate bone renderer component — Fluffy Bones has no dependency on Animati
 Rigging or anything else. **Show Axes** adds each bone's local axes, X red, Y
 green, Z blue.
 
-## The tip bone
+## The dummy bone
 
 A bone in Blender runs from a head to a tail and has a length. In a game engine
 it is a single point with a rotation — the length you see is only the gap to the
 next bone, so the last bone of a chain has none at all, and nothing to swing
 towards.
 
-Fluffy Bones invents a tip for it. **Auto** measures it: the bone below the chain
-when the rig has one, otherwise the length of the bone before it. Turn Auto off
-to set **Tip Bone Length** by hand — a longer tip makes the end of the chain
-swing wider and slower. The invented tip is drawn faded, so it never reads as a
-bone the rig actually has.
+**Dummy Bone** invents one for it. **Auto** measures its length: the bone below
+the chain when the rig has one, otherwise the length of the bone before it. Turn
+Auto off to set **Dummy Bone Length** by hand — a longer dummy makes the end of
+the chain swing wider and slower. It draws faded, so it never reads as a bone the
+rig actually has.
 
-It sits on the chain rather than on the profile on purpose: a profile is feel and
-gets shared between a tail and a skirt, while a tip length is geometry and
+Turn the dummy off when the rig already ends in a spare bone put there for this
+purpose. The last real bone is then left to follow its parent instead of being
+simulated, since it has nothing to aim at.
+
+These sit on the chain rather than on the profile on purpose: a profile is feel
+and gets shared between a tail and a skirt, while a dummy length is geometry and
 belongs to one rig.
 
 ## Contents

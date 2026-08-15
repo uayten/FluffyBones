@@ -182,6 +182,36 @@ namespace Fluffy
             return captured;
         }
 
+        /// <summary>
+        /// Copies one chain's pose and dummy bone settings onto every other chain, which
+        /// is how a skirt gets set up once rather than eight times.
+        /// </summary>
+        /// <param name="sourceIndex">The chain to copy from.</param>
+        /// <returns>How many chains were changed.</returns>
+        public int CopySettingsToAllChains(int sourceIndex)
+        {
+            if (sourceIndex < 0 || sourceIndex >= _chains.Count)
+            {
+                return 0;
+            }
+
+            FluffyChain source = _chains[sourceIndex];
+            int changed = 0;
+
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                if (i == sourceIndex)
+                {
+                    continue;
+                }
+
+                source.CopySettingsTo(_chains[i]);
+                changed++;
+            }
+
+            return changed;
+        }
+
         /// <summary>Forgets the authored pose on every chain.</summary>
         public void ClearDefaultPose()
         {
