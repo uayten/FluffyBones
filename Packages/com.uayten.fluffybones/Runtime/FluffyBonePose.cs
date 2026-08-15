@@ -4,52 +4,39 @@ using UnityEngine;
 namespace Fluffy
 {
     /// <summary>
-    /// What one bone of a chain is set to: the rotation it rests at, and how far it
-    /// may swing away from it on each of its own axes.
+    /// What one bone of a chain is set to: the rotation it rests at, and optionally
+    /// limits of its own.
     /// </summary>
     /// <remarks>
-    /// Limits are a min and a max per axis, not a single cone, because the two sides
-    /// are rarely the same — a cape billows far off the back and barely moves the
-    /// other way. Y and Z open the cone the bone swings inside; X is the twist along
-    /// the bone, drawn as a circle. Kept in one struct rather than parallel arrays,
-    /// so trimming a pose cannot leave a rotation matched with another bone's limits.
+    /// Most bones of a chain want the same limits, so they take the chain's global
+    /// ones and only the odd bone that needs to differ carries its own. Rotation and
+    /// limits are kept in one struct rather than parallel arrays, so trimming a pose
+    /// cannot leave a rotation matched with another bone's limits.
     /// </remarks>
     [Serializable]
     public struct FluffyBonePose
     {
-        /// <summary>A limit of 180° in both directions holds nothing back.</summary>
-        public const float Free = 180f;
-
         [Tooltip("Local rotation the bone rests at, as euler angles.")]
         public Vector3 Rotation;
 
-        [Tooltip("Twist along the bone, around its local X. Minimum and maximum degrees.")]
-        public Vector2 TwistLimit;
+        [Tooltip("Use limits set on this bone instead of the chain's global ones.")]
+        public bool OverrideLimits;
 
-        [Tooltip("Swing towards the bone's local Y. Minimum and maximum degrees — this " +
-                 "is one of the two the cone opens on.")]
-        public Vector2 SwingYLimit;
+        [Tooltip("This bone's own limits, used only while Override Limits is on.")]
+        public FluffyLimits Limits;
 
-        [Tooltip("Swing towards the bone's local Z. Minimum and maximum degrees — this " +
-                 "is the other one.")]
-        public Vector2 SwingZLimit;
-
-        /// <summary>A bone at <paramref name="rotation"/>, free to swing.</summary>
+        /// <summary>A bone at <paramref name="rotation"/>, taking the global limits.</summary>
         public FluffyBonePose(Vector3 rotation)
         {
             Rotation = rotation;
-            TwistLimit = FreeRange;
-            SwingYLimit = FreeRange;
-            SwingZLimit = FreeRange;
+            OverrideLimits = false;
+            Limits = FluffyLimits.Free;
         }
 
-        /// <summary>The min and max of an axis that is not limited at all.</summary>
-        public static Vector2 FreeRange => new Vector2(-Free, Free);
-
-        /// <summary>Whether an axis range lets the bone move as far as it likes.</summary>
-        public static bool IsFree(Vector2 range)
+        /// <summary>The limits that apply, given the chain's global ones.</summary>
+        public FluffyLimits Resolve(FluffyLimits global)
         {
-            return range.x <= -Free && range.y >= Free;
+            return OverrideLimits ? Limits : global;
         }
     }
 }

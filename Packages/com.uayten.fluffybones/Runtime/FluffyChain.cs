@@ -21,9 +21,16 @@ namespace Fluffy
         private const float DefaultDrag = 0.15f;
         private const float MinBoneLength = 1e-5f;
         private const int ConeSegments = 32;
+        private const int ArcSegments = 24;
         private const float ConeScale = 0.8f;
         private const float TwistCircleScale = 0.35f;
         private const float TwistCircleOffset = 0.5f;
+
+        // Shared by the axis lines and the limit shapes, so an arc and the axis it
+        // belongs to are obviously the same thing.
+        private static readonly Color AxisXColor = new Color(0.93f, 0.35f, 0.35f);
+        private static readonly Color AxisYColor = new Color(0.5f, 0.86f, 0.3f);
+        private static readonly Color AxisZColor = new Color(0.36f, 0.62f, 1f);
 
         [Tooltip("Where the chain starts. Everything below it comes along, following " +
                  "the first child of each bone.")]
@@ -54,6 +61,10 @@ namespace Fluffy
         [Tooltip("A saved pose, shared with other chains. Empty keeps the rotations on " +
                  "this chain alone.")]
         [SerializeField] private FluffyPose _pose;
+
+        [Tooltip("Limits every bone takes unless it overrides them. Used when no pose " +
+                 "asset is assigned.")]
+        [SerializeField] private FluffyLimits _globalLimits = FluffyLimits.Free;
 
         [Tooltip("What each bone rests at and how far it may swing. Used when no pose " +
                  "asset is assigned.")]
@@ -158,13 +169,13 @@ namespace Fluffy
                     continue;
                 }
 
-                FluffyBonePose limits = ResolveLimits(i);
+                FluffyLimits limits = ResolveLimits(i);
 
                 _joints.Add(new Joint
                 {
                     Transform = bone,
-                    SwingYLimit = limits.SwingYLimit,
-                    SwingZLimit = limits.SwingZLimit,
+                    SwingYLimit = limits.SwingY,
+                    SwingZLimit = limits.SwingZ,
                     RestLocalRotation = restRotations[i],
                     BoneAxis = Quaternion.Inverse(bone.rotation) * ((tip - bone.position) / length),
                     Length = length,
@@ -267,7 +278,7 @@ namespace Fluffy
         /// </remarks>
         private static Vector3 ApplyAngleLimits(Joint joint, Quaternion restRotation, Vector3 direction)
         {
-            if (FluffyBonePose.IsFree(joint.SwingYLimit) && FluffyBonePose.IsFree(joint.SwingZLimit))
+            if (FluffyLimits.IsFree(joint.SwingYLimit) && FluffyLimits.IsFree(joint.SwingZLimit))
             {
                 return direction;
             }
@@ -367,6 +378,7 @@ namespace Fluffy
                 return;
             }
 
+            Color rimColor = Gizmos.color;
             List<Transform> bones = CollectChain(_startBone, _lastBone);
 
             for (int i = 0; i < bones.Count; i++)
@@ -381,23 +393,68 @@ namespace Fluffy
                     continue;
                 }
 
-                FluffyBonePose limits = ResolveLimits(i);
+                FluffyLimits limits = ResolveLimits(i);
+                if (limits.IsUnrestricted)
+                {
+                    continue;
+                }
+
                 Vector3 axis = toTip / length;
                 BuildSwingFrame(axis, out Vector3 towardsY, out Vector3 towardsZ);
+                float size = length * ConeScale;
 
-                DrawSwingCone(head, axis, towardsY, towardsZ, limits, length * ConeScale);
-                DrawTwistCircle(head, axis, towardsY, towardsZ, limits, length * ConeScale);
+                // Each axis in its own colour, matching the lines Show Axes draws: the
+                // arc you are looking at names the field you need to edit.
+                DrawSwingArc(head, axis, towardsY, limits.SwingY, size, AxisYColor);
+                DrawSwingArc(head, axis, towardsZ, limits.SwingZ, size, AxisZColor);
+                DrawSwingRim(head, axis, towardsY, towardsZ, limits, size, rimColor);
+                DrawTwistCircle(head, axis, towardsY, towardsZ, limits.Twist, size);
             }
+
+            Gizmos.color = rimColor;
         }
 
-        private static void DrawSwingCone(
-            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ, FluffyBonePose limits, float length)
+        /// <summary>
+        /// The flat arc one axis may swing through, drawn in that axis's colour. This is
+        /// the shape you read a number off; the rim behind it is the two combined.
+        /// </summary>
+        private static void DrawSwingArc(
+            Vector3 head, Vector3 axis, Vector3 towards, Vector2 range, float length, Color color)
         {
-            if (FluffyBonePose.IsFree(limits.SwingYLimit) && FluffyBonePose.IsFree(limits.SwingZLimit))
+            if (FluffyLimits.IsFree(range))
             {
                 return;
             }
 
+            Gizmos.color = color;
+
+            Vector3 start = head + Swing(axis, towards, range.x) * length;
+            Vector3 previous = start;
+
+            for (int step = 1; step <= ArcSegments; step++)
+            {
+                float degrees = Mathf.Lerp(range.x, range.y, step / (float)ArcSegments);
+                Vector3 point = head + Swing(axis, towards, degrees) * length;
+                Gizmos.DrawLine(previous, point);
+                previous = point;
+            }
+
+            // The two edges of the arc, so where it stops is unmistakable.
+            Gizmos.DrawLine(head, start);
+            Gizmos.DrawLine(head, previous);
+        }
+
+        /// <summary>The lopsided rim the two swings make together — the cone seen in 3D.</summary>
+        private static void DrawSwingRim(
+            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ,
+            FluffyLimits limits, float length, Color color)
+        {
+            if (FluffyLimits.IsFree(limits.SwingY) || FluffyLimits.IsFree(limits.SwingZ))
+            {
+                return;
+            }
+
+            Gizmos.color = color;
             Vector3 previous = Vector3.zero;
 
             for (int step = 0; step <= ConeSegments; step++)
@@ -406,24 +463,16 @@ namespace Fluffy
                 float cos = Mathf.Cos(around);
                 float sin = Mathf.Sin(around);
 
-                // Each quadrant of the rim uses the limit facing that way, which is what
-                // makes the cone lopsided rather than a plain ellipse.
-                float degreesY = (cos >= 0f ? limits.SwingYLimit.y : -limits.SwingYLimit.x) * Mathf.Abs(cos);
-                float degreesZ = (sin >= 0f ? limits.SwingZLimit.y : -limits.SwingZLimit.x) * Mathf.Abs(sin);
+                // Each quadrant uses the limit facing that way, which is what makes the
+                // rim lopsided rather than a plain ellipse.
+                float degreesY = (cos >= 0f ? limits.SwingY.y : -limits.SwingY.x) * cos;
+                float degreesZ = (sin >= 0f ? limits.SwingZ.y : -limits.SwingZ.x) * sin;
 
-                Vector3 rim = head + SwingToDirection(
-                    axis, towardsY, towardsZ,
-                    cos >= 0f ? degreesY : -degreesY,
-                    sin >= 0f ? degreesZ : -degreesZ) * length;
+                Vector3 rim = head + SwingToDirection(axis, towardsY, towardsZ, degreesY, degreesZ) * length;
 
                 if (step > 0)
                 {
                     Gizmos.DrawLine(previous, rim);
-                }
-
-                if (step % (ConeSegments / 8) == 0)
-                {
-                    Gizmos.DrawLine(head, rim);
                 }
 
                 previous = rim;
@@ -431,12 +480,14 @@ namespace Fluffy
         }
 
         private static void DrawTwistCircle(
-            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ, FluffyBonePose limits, float length)
+            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ, Vector2 range, float length)
         {
-            if (FluffyBonePose.IsFree(limits.TwistLimit))
+            if (FluffyLimits.IsFree(range))
             {
                 return;
             }
+
+            Gizmos.color = AxisXColor;
 
             float radius = length * TwistCircleScale;
             Vector3 centre = head + axis * (length * TwistCircleOffset);
@@ -451,8 +502,8 @@ namespace Fluffy
             }
 
             // Two spokes marking where the twist is allowed to stop.
-            DrawTwistSpoke(centre, towardsY, towardsZ, radius, limits.TwistLimit.x);
-            DrawTwistSpoke(centre, towardsY, towardsZ, radius, limits.TwistLimit.y);
+            DrawTwistSpoke(centre, towardsY, towardsZ, radius, range.x);
+            DrawTwistSpoke(centre, towardsY, towardsZ, radius, range.y);
         }
 
         private static void DrawTwistSpoke(
@@ -460,6 +511,13 @@ namespace Fluffy
         {
             float radians = degrees * Mathf.Deg2Rad;
             Gizmos.DrawLine(centre, centre + (towardsY * Mathf.Cos(radians) + towardsZ * Mathf.Sin(radians)) * radius);
+        }
+
+        /// <summary>The bone's direction tipped <paramref name="degrees"/> towards one axis.</summary>
+        private static Vector3 Swing(Vector3 axis, Vector3 towards, float degrees)
+        {
+            float radians = degrees * Mathf.Deg2Rad;
+            return axis * Mathf.Cos(radians) + towards * Mathf.Sin(radians);
         }
 
         /// <summary>
@@ -486,13 +544,13 @@ namespace Fluffy
                     continue;
                 }
 
-                Gizmos.color = Color.red;
+                Gizmos.color = AxisXColor;
                 Gizmos.DrawLine(bone.position, bone.position + bone.right * size);
 
-                Gizmos.color = Color.green;
+                Gizmos.color = AxisYColor;
                 Gizmos.DrawLine(bone.position, bone.position + bone.up * size);
 
-                Gizmos.color = Color.blue;
+                Gizmos.color = AxisZColor;
                 Gizmos.DrawLine(bone.position, bone.position + bone.forward * size);
             }
 
@@ -591,9 +649,8 @@ namespace Fluffy
                 {
                     // Capture reads rotations off the scene; the limits were authored and
                     // have nothing to do with where the bones happen to be.
-                    SwingYLimit = kept ? existing[i].SwingYLimit : FluffyBonePose.FreeRange,
-                    SwingZLimit = kept ? existing[i].SwingZLimit : FluffyBonePose.FreeRange,
-                    TwistLimit = kept ? existing[i].TwistLimit : FluffyBonePose.FreeRange
+                    OverrideLimits = kept && existing[i].OverrideLimits,
+                    Limits = kept ? existing[i].Limits : FluffyLimits.Free
                 };
             }
 
@@ -632,12 +689,12 @@ namespace Fluffy
         public bool HasDefaultPose => PoseData != null && PoseData.Length > 0;
 
         /// <summary>What the bone at <paramref name="index"/> is allowed to do.</summary>
-        private FluffyBonePose ResolveLimits(int index)
+        private FluffyLimits ResolveLimits(int index)
         {
+            FluffyLimits global = _pose != null ? _pose.GlobalLimits : _globalLimits;
             FluffyBonePose[] pose = PoseData;
-            return pose != null && index < pose.Length
-                ? pose[index]
-                : new FluffyBonePose(Vector3.zero);
+
+            return pose != null && index < pose.Length ? pose[index].Resolve(global) : global;
         }
 
         /// <summary>

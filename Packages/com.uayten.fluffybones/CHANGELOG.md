@@ -47,8 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minimums and maximums make the cone lopsided, which is what lets a cape billow
   far off the back and barely move the other way. Stored in the rotation asset
   beside the pose, so both are shared and copied together.
-- **Show Limits**: draws the cone and the twist circle from each bone's head, in
-  its own colour.
+- Limits are set globally per chain and every bone follows them, until a bone
+  ticks **Override** and carries its own. **Reset to global** puts it back.
+- **Show Limits**: draws them from each bone's head, each axis in its own colour
+  — a green arc for Y, a blue one for Z, the rim they make together, and a red
+  circle for the twist. The field labels carry the same colours.
 - **Copy this chain's setup to the others**: pushes one chain's pose asset, dummy
   bone settings and profile override onto every other chain, leaving their start
   and last bones alone.

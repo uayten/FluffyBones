@@ -17,8 +17,14 @@ namespace Fluffy
     [CreateAssetMenu(fileName = "FluffyPose", menuName = "Fluffy Bones/Pose")]
     public class FluffyPose : ScriptableObject
     {
+        [Tooltip("Limits every bone takes unless it overrides them.")]
+        [SerializeField] private FluffyLimits _globalLimits = FluffyLimits.Free;
+
         [Tooltip("One entry per bone, in order from the start of the chain.")]
         [SerializeField] private FluffyBonePose[] _bones;
+
+        /// <summary>Limits every bone takes unless it overrides them.</summary>
+        public FluffyLimits GlobalLimits => _globalLimits;
 
         /// <summary>One entry per bone, from the start of the chain.</summary>
         public FluffyBonePose[] Bones => _bones;

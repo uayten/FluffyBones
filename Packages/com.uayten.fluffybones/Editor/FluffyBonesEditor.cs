@@ -18,6 +18,7 @@ namespace Fluffy.Editor
         private const float PoseAssetLabelWidth = 175f;
         private const float AxisLabelWidth = 13f;
         private const float AxisSpacing = 4f;
+        private const float OverrideToggleWidth = 74f;
         private const float DegreesPerPixel = 0.5f;
         private const float MinAngle = -180f;
         private const float MaxAngle = 180f;
@@ -288,7 +289,7 @@ namespace Fluffy.Editor
             }
 
             DrawTrimButton(pose, bones.Count, owner);
-            DrawAngleLimits(pose, bones);
+            DrawAngleLimits(pose, bones, owner, chain);
 
             if (owner != serializedObject)
             {
@@ -327,7 +328,8 @@ namespace Fluffy.Editor
         /// How far each bone may swing from the pose. Its own section rather than a
         /// fourth column, which would leave every row too narrow to read.
         /// </summary>
-        private void DrawAngleLimits(SerializedProperty pose, List<Transform> bones)
+        private void DrawAngleLimits(
+            SerializedProperty pose, List<Transform> bones, SerializedObject owner, SerializedProperty chain)
         {
             EditorGUILayout.Space();
 
@@ -345,28 +347,60 @@ namespace Fluffy.Editor
             }
 
             EditorGUILayout.HelpBox(
-                "How far each bone may swing from its pose, in degrees, per axis. Y and Z "
-                + "open the cone drawn in the scene; X is the twist along the bone, drawn "
-                + "as a circle. -180 to 180 leaves an axis free.",
+                "How far a bone may turn from its pose, in degrees, per axis. Every bone "
+                + "takes the global limits unless it overrides them. -180 to 180 leaves an "
+                + "axis free and draws nothing.",
                 MessageType.None);
+
+            SerializedProperty global = ResolveGlobalLimits(owner, chain);
+            EditorGUILayout.LabelField("Global", EditorStyles.miniBoldLabel);
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                DrawLimits(global);
+            }
+
+            EditorGUILayout.Space(2f);
+            EditorGUILayout.LabelField("Per Bone", EditorStyles.miniBoldLabel);
 
             using (new EditorGUI.IndentLevelScope())
             {
                 int count = Mathf.Min(pose.arraySize, bones.Count);
                 for (int i = 0; i < count; i++)
                 {
-                    DrawBoneLimits(pose.GetArrayElementAtIndex(i), bones[i].name);
+                    DrawBoneLimits(pose.GetArrayElementAtIndex(i), bones[i].name, global);
                 }
             }
         }
 
-        /// <summary>
-        /// One bone's three axis ranges, behind a foldout. Six numbers on a row would be
-        /// unreadable, and most bones never need opening.
-        /// </summary>
-        private static void DrawBoneLimits(SerializedProperty entry, string label)
+        /// <summary>The global limits of whichever object holds this chain's pose.</summary>
+        private SerializedProperty ResolveGlobalLimits(SerializedObject owner, SerializedProperty chain)
         {
-            entry.isExpanded = EditorGUILayout.Foldout(entry.isExpanded, label, true);
+            return owner == serializedObject
+                ? chain.FindPropertyRelative("_globalLimits")
+                : owner.FindProperty("_globalLimits");
+        }
+
+        /// <summary>
+        /// One bone's limits, behind a foldout. Closed it shows whether the bone follows
+        /// the global setting; open it shows the three axes and how to go back.
+        /// </summary>
+        private static void DrawBoneLimits(SerializedProperty entry, string label, SerializedProperty global)
+        {
+            SerializedProperty overrides = entry.FindPropertyRelative(nameof(FluffyBonePose.OverrideLimits));
+
+            Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
+            var foldoutRect = new Rect(row.x, row.y, row.width - OverrideToggleWidth, row.height);
+            var toggleRect = new Rect(row.xMax - OverrideToggleWidth, row.y, OverrideToggleWidth, row.height);
+
+            int indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+
+            entry.isExpanded = EditorGUI.Foldout(foldoutRect, entry.isExpanded, label, true);
+            overrides.boolValue = EditorGUI.ToggleLeft(toggleRect, "Override", overrides.boolValue);
+
+            EditorGUI.indentLevel = indent;
+
             if (!entry.isExpanded)
             {
                 return;
@@ -374,14 +408,48 @@ namespace Fluffy.Editor
 
             using (new EditorGUI.IndentLevelScope())
             {
-                DrawRange(entry.FindPropertyRelative(nameof(FluffyBonePose.SwingYLimit)), "Y Swing");
-                DrawRange(entry.FindPropertyRelative(nameof(FluffyBonePose.SwingZLimit)), "Z Swing");
-                DrawRange(entry.FindPropertyRelative(nameof(FluffyBonePose.TwistLimit)), "X Twist");
+                if (!overrides.boolValue)
+                {
+                    using (new EditorGUI.DisabledScope(true))
+                    {
+                        DrawLimits(global);
+                    }
+
+                    return;
+                }
+
+                DrawLimits(entry.FindPropertyRelative(nameof(FluffyBonePose.Limits)));
+
+                if (GUILayout.Button("Reset to global"))
+                {
+                    CopyLimits(global, entry.FindPropertyRelative(nameof(FluffyBonePose.Limits)));
+                    overrides.boolValue = false;
+                }
             }
         }
 
-        /// <summary>A minimum and a maximum in degrees, side by side.</summary>
-        private static void DrawRange(SerializedProperty range, string label)
+        private static void DrawLimits(SerializedProperty limits)
+        {
+            DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)), "Y Swing", AxisYStyle);
+            DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ)), "Z Swing", AxisZStyle);
+            DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.Twist)), "X Twist", AxisXStyle);
+        }
+
+        private static void CopyLimits(SerializedProperty from, SerializedProperty to)
+        {
+            to.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value =
+                from.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value;
+            to.FindPropertyRelative(nameof(FluffyLimits.SwingZ)).vector2Value =
+                from.FindPropertyRelative(nameof(FluffyLimits.SwingZ)).vector2Value;
+            to.FindPropertyRelative(nameof(FluffyLimits.Twist)).vector2Value =
+                from.FindPropertyRelative(nameof(FluffyLimits.Twist)).vector2Value;
+        }
+
+        /// <summary>
+        /// A minimum and a maximum in degrees, side by side, under a label in the axis's
+        /// own colour so it matches the arc drawn in the scene.
+        /// </summary>
+        private static void DrawRange(SerializedProperty range, string label, GUIStyle style)
         {
             Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
 
@@ -389,7 +457,7 @@ namespace Fluffy.Editor
             EditorGUI.indentLevel = 0;
 
             var nameRect = new Rect(row.x, row.y, BoneLabelWidth, row.height);
-            EditorGUI.LabelField(nameRect, label, EditorStyles.label);
+            EditorGUI.LabelField(nameRect, label, style);
 
             float width = (row.width - BoneLabelWidth - AxisSpacing) / 2f;
             var minRect = new Rect(row.x + BoneLabelWidth, row.y, width, row.height);
@@ -479,9 +547,12 @@ namespace Fluffy.Editor
                 SerializedProperty entry = pose.GetArrayElementAtIndex(i);
                 entry.FindPropertyRelative(nameof(FluffyBonePose.Rotation)).vector3Value =
                     NormalizeEuler(bones[i].localRotation.eulerAngles);
-                entry.FindPropertyRelative(nameof(FluffyBonePose.SwingYLimit)).vector2Value = FluffyBonePose.FreeRange;
-                entry.FindPropertyRelative(nameof(FluffyBonePose.SwingZLimit)).vector2Value = FluffyBonePose.FreeRange;
-                entry.FindPropertyRelative(nameof(FluffyBonePose.TwistLimit)).vector2Value = FluffyBonePose.FreeRange;
+                entry.FindPropertyRelative(nameof(FluffyBonePose.OverrideLimits)).boolValue = false;
+
+                SerializedProperty limits = entry.FindPropertyRelative(nameof(FluffyBonePose.Limits));
+                limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value = FluffyLimits.FreeRange;
+                limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ)).vector2Value = FluffyLimits.FreeRange;
+                limits.FindPropertyRelative(nameof(FluffyLimits.Twist)).vector2Value = FluffyLimits.FreeRange;
             }
         }
 

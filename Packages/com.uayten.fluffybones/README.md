@@ -103,11 +103,21 @@ green, Z blue.
 
 ## Angle limits
 
-Under **Angle Limits**, each bone gets a minimum and a maximum on each of its own
-axes, in degrees. -180 to 180 leaves an axis free, which is the default.
+Under **Angle Limits**, a bone may turn only so far from its pose, set as a
+minimum and a maximum on each of its own axes, in degrees. -180 to 180 leaves an
+axis free, which is the default and draws nothing.
 
 - **Y Swing** and **Z Swing** open the cone the bone moves inside.
 - **X Twist** is the roll along the bone, drawn as a circle.
+
+Each axis keeps its colour throughout — Y green, Z blue, X red — in the field
+labels and in the shapes drawn in the scene, so the arc you are looking at names
+the field you need to edit.
+
+Limits are set once under **Global** and every bone follows them. A bone that
+needs to differ gets **Override** ticked and its own three axes; **Reset to
+global** puts it back. That is the usual shape of a chain: the whole cape moves
+alike except the two bones at the shoulders.
 
 Separate minimums and maximums are what a cape needs. Resting against the back,
 it should billow out when the character runs and barely move when they back up —
@@ -118,11 +128,15 @@ swings wildly both ways, lower it and it never billows at all.
 For a skirt, tight limits on the upper bones are what keep a strand from folding
 through a leg, and there the two sides are usually equal.
 
-Tick **Show Limits** to see them. The cone starts at the bone's head and is
+Tick **Show Limits** to see them. Everything starts at the bone's head: a green
+arc for the Y range, a blue arc for the Z range, the rim they make together in
+the limit colour, and a red circle around the bone for the twist. All of it is
 lopsided whenever a minimum and maximum differ, so a glance tells you which way a
-bone is free to go. The limits are read in the bone's own axes, which assumes the
-bone runs along its local X — the usual result of an export — so if a cone looks
-turned the wrong way, switch on **Show Axes** and check.
+bone is free to go.
+
+The limits are read in the bone's own axes, which assumes the bone runs along its
+local X — the usual result of an export — so if an arc looks turned the wrong
+way, switch on **Show Axes** and check.
 
 The limits live in the same asset as the rotations, so they are shared and copied
 along with them. They are per bone rather than per profile because a limit
