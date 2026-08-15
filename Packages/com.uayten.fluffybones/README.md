@@ -103,13 +103,26 @@ green, Z blue.
 
 ## Angle limits
 
-Under **Angle Limits**, each bone gets a cap on how far it may swing away from
+Under **Angle Limits**, each bone gets two caps on how far it may swing away from
 its pose, in degrees. 180 lets it go anywhere, which is the default; 0 pins it to
-the pose. Lower values on the upper bones of a skirt are what keep a strand from
-folding through a leg.
+the pose.
 
-The limits live in the same pose asset as the rotations, so they are shared and
-copied along with them. They are per bone rather than per profile because a limit
+The two are told apart by the character's facing:
+
+- **Backward** is where a bone flies when the character walks **forwards**.
+- **Forward** is where it goes when they walk **backwards**.
+
+That split is what a cape needs. A cape resting against the back should billow
+out when the character runs and barely move when they back up — so give it a
+large backward limit and a small forward one. A symmetric cap cannot express
+that: raise it and the cape swings wildly both ways, lower it and it never
+billows at all.
+
+For a skirt, low limits on the upper bones are what keep a strand from folding
+through a leg, and there both sides are usually equal.
+
+The limits live in the same asset as the rotations, so they are shared and copied
+along with them. They are per bone rather than per profile because a limit
 describes the rig — where the leg is — while a profile describes feel.
 
 ## The dummy bone

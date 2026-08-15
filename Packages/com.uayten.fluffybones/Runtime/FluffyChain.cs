@@ -154,10 +154,13 @@ namespace Fluffy
                     continue;
                 }
 
+                FluffyBonePose limits = ResolveLimits(i);
+
                 _joints.Add(new Joint
                 {
                     Transform = bone,
-                    AngleLimit = ResolveAngleLimit(i),
+                    ForwardLimit = limits.ForwardLimit,
+                    BackwardLimit = limits.BackwardLimit,
                     RestLocalRotation = restRotations[i],
                     BoneAxis = Quaternion.Inverse(bone.rotation) * ((tip - bone.position) / length),
                     Length = length,
@@ -200,7 +203,11 @@ namespace Fluffy
         /// <summary>Advances the chain by one step.</summary>
         /// <param name="deltaTime">Seconds since the last step.</param>
         /// <param name="fallbackProfile">Used when the chain has no override of its own.</param>
-        public void Simulate(float deltaTime, FluffyProfile fallbackProfile)
+        /// <param name="characterForward">
+        /// Which way the character faces, in world space. Tells the two angle limits
+        /// apart: a bone swinging towards it is limited by the forward one.
+        /// </param>
+        public void Simulate(float deltaTime, FluffyProfile fallbackProfile, Vector3 characterForward)
         {
             if (!_isBuilt || deltaTime <= 0f)
             {
@@ -238,18 +245,7 @@ namespace Fluffy
                 Vector3 offset = nextTip - position;
                 float distance = offset.magnitude;
                 Vector3 direction = distance < MinBoneLength ? restDirection : offset / distance;
-
-                if (joint.AngleLimit < FluffyBonePose.Free)
-                {
-                    // Pull the direction back towards the rest pose until it is inside the
-                    // cone the bone is allowed to move in.
-                    float swing = Vector3.Angle(restDirection, direction);
-                    if (swing > joint.AngleLimit)
-                    {
-                        direction = Vector3.RotateTowards(
-                            restDirection, direction, joint.AngleLimit * Mathf.Deg2Rad, 0f);
-                    }
-                }
+                direction = ApplyAngleLimit(joint, restDirection, direction, characterForward);
 
                 nextTip = position + direction * joint.Length;
 
@@ -258,6 +254,38 @@ namespace Fluffy
 
                 bone.rotation = Quaternion.FromToRotation(restDirection, nextTip - position) * restRotation;
             }
+        }
+
+        /// <summary>
+        /// Holds a bone inside the arc it is allowed to swing through.
+        /// </summary>
+        /// <remarks>
+        /// The two limits are told apart by which way the bone has moved relative to the
+        /// character's facing. A cape resting against the back flies backwards when the
+        /// character walks forwards, and forwards when they back up — so a big backward
+        /// limit with a small forward one gives a cape that billows on the way out and
+        /// stays put on the way back.
+        /// </remarks>
+        private static Vector3 ApplyAngleLimit(
+            Joint joint, Vector3 restDirection, Vector3 direction, Vector3 characterForward)
+        {
+            bool towardsFront = Vector3.Dot(direction - restDirection, characterForward) >= 0f;
+            float limit = towardsFront ? joint.ForwardLimit : joint.BackwardLimit;
+
+            if (limit >= FluffyBonePose.Free)
+            {
+                return direction;
+            }
+
+            float swing = Vector3.Angle(restDirection, direction);
+            if (swing <= limit)
+            {
+                return direction;
+            }
+
+            // Pull the direction back towards the rest pose until it sits on the edge of
+            // the arc rather than past it.
+            return Vector3.RotateTowards(restDirection, direction, limit * Mathf.Deg2Rad, 0f);
         }
 
         /// <summary>
@@ -415,13 +443,14 @@ namespace Fluffy
 
             for (int i = 0; i < bones.Count; i++)
             {
+                bool kept = existing != null && i < existing.Length;
+
                 captured[i] = new FluffyBonePose(bones[i].localRotation.eulerAngles)
                 {
                     // Capture reads rotations off the scene; the limits were authored and
                     // have nothing to do with where the bones happen to be.
-                    AngleLimit = existing != null && i < existing.Length
-                        ? existing[i].AngleLimit
-                        : FluffyBonePose.Free
+                    ForwardLimit = kept ? existing[i].ForwardLimit : FluffyBonePose.Free,
+                    BackwardLimit = kept ? existing[i].BackwardLimit : FluffyBonePose.Free
                 };
             }
 
@@ -459,11 +488,13 @@ namespace Fluffy
         /// <summary>Whether this chain has an authored default pose.</summary>
         public bool HasDefaultPose => PoseData != null && PoseData.Length > 0;
 
-        /// <summary>How far the bone at <paramref name="index"/> may swing, in degrees.</summary>
-        private float ResolveAngleLimit(int index)
+        /// <summary>What the bone at <paramref name="index"/> is allowed to do.</summary>
+        private FluffyBonePose ResolveLimits(int index)
         {
             FluffyBonePose[] pose = PoseData;
-            return pose != null && index < pose.Length ? pose[index].AngleLimit : FluffyBonePose.Free;
+            return pose != null && index < pose.Length
+                ? pose[index]
+                : new FluffyBonePose(Vector3.zero);
         }
 
         /// <summary>
@@ -632,8 +663,11 @@ namespace Fluffy
             /// <summary>Rest distance from the bone's head to its tip, in world units.</summary>
             public float Length;
 
-            /// <summary>How far the bone may swing from its rest direction, in degrees.</summary>
-            public float AngleLimit;
+            /// <summary>How far the bone may swing towards the character's front, in degrees.</summary>
+            public float ForwardLimit;
+
+            /// <summary>How far the bone may swing towards the character's back, in degrees.</summary>
+            public float BackwardLimit;
 
             /// <summary>Position along the chain: 0 at the root, 1 at the tip.</summary>
             public float NormalizedDepth;

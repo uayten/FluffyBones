@@ -130,9 +130,10 @@ namespace Fluffy
                 return;
             }
 
+            Vector3 forward = transform.forward;
             for (int i = 0; i < _chains.Count; i++)
             {
-                _chains[i].Simulate(deltaTime, _profile);
+                _chains[i].Simulate(deltaTime, _profile, forward);
             }
         }
 

@@ -15,6 +15,7 @@ namespace Fluffy.Editor
     {
         private const string ProfileFolderHint = "Assets";
         private const float BoneLabelWidth = 110f;
+        private const float PoseAssetLabelWidth = 175f;
         private const float AxisLabelWidth = 13f;
         private const float AxisSpacing = 4f;
         private const float DegreesPerPixel = 0.5f;
@@ -333,31 +334,78 @@ namespace Fluffy.Editor
             }
 
             EditorGUILayout.HelpBox(
-                "How far each bone may swing away from its pose. 180 lets it go anywhere; "
-                + "lower values keep a skirt from folding through a leg.",
+                "How far each bone may swing away from its pose, in degrees. 180 lets it go "
+                + "anywhere, 0 pins it. Forward is the way a bone goes when the character "
+                + "walks backwards; backward is where it flies when they walk forwards.",
                 MessageType.None);
 
             using (new EditorGUI.IndentLevelScope())
             {
+                DrawLimitHeader();
+
                 int count = Mathf.Min(pose.arraySize, bones.Count);
                 for (int i = 0; i < count; i++)
                 {
-                    SerializedProperty limit = pose.GetArrayElementAtIndex(i)
-                        .FindPropertyRelative(nameof(FluffyBonePose.AngleLimit));
-
-                    EditorGUILayout.PropertyField(limit, new GUIContent(bones[i].name));
+                    SerializedProperty entry = pose.GetArrayElementAtIndex(i);
+                    DrawBoneLimits(
+                        entry.FindPropertyRelative(nameof(FluffyBonePose.ForwardLimit)),
+                        entry.FindPropertyRelative(nameof(FluffyBonePose.BackwardLimit)),
+                        bones[i].name);
                 }
             }
+        }
+
+        private static void DrawLimitHeader()
+        {
+            Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
+            SplitLimitRow(row, out Rect _, out Rect forward, out Rect backward);
+
+            int indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+
+            EditorGUI.LabelField(forward, "Forward", EditorStyles.miniLabel);
+            EditorGUI.LabelField(backward, "Backward", EditorStyles.miniLabel);
+
+            EditorGUI.indentLevel = indent;
+        }
+
+        private static void DrawBoneLimits(SerializedProperty forward, SerializedProperty backward, string label)
+        {
+            Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
+            SplitLimitRow(row, out Rect nameRect, out Rect forwardRect, out Rect backwardRect);
+
+            int indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+
+            EditorGUI.LabelField(nameRect, label, EditorStyles.label);
+            EditorGUI.PropertyField(forwardRect, forward, GUIContent.none);
+            EditorGUI.PropertyField(backwardRect, backward, GUIContent.none);
+
+            EditorGUI.indentLevel = indent;
+        }
+
+        private static void SplitLimitRow(Rect row, out Rect name, out Rect forward, out Rect backward)
+        {
+            name = new Rect(row.x, row.y, BoneLabelWidth, row.height);
+
+            float width = (row.width - BoneLabelWidth - AxisSpacing) / 2f;
+            forward = new Rect(row.x + BoneLabelWidth, row.y, width, row.height);
+            backward = new Rect(forward.xMax + AxisSpacing, row.y, width, row.height);
         }
 
         private void DrawPoseAsset(SerializedProperty poseAsset)
         {
             using (new EditorGUILayout.HorizontalScope())
             {
+                float previous = EditorGUIUtility.labelWidth;
+                EditorGUIUtility.labelWidth = PoseAssetLabelWidth;
+
                 EditorGUILayout.PropertyField(poseAsset, new GUIContent(
-                    "Pose Asset",
+                    "Chain Bones Rotation Asset",
                     "A saved pose, shared with other chains. Rotations are local, so one "
-                    + "asset fits every chain with the same bone count."));
+                    + "asset fits every chain with the same bones."));
+
+                EditorGUIUtility.labelWidth = previous;
 
                 if (GUILayout.Button("New", GUILayout.Width(46f)))
                 {
@@ -414,7 +462,8 @@ namespace Fluffy.Editor
                 SerializedProperty entry = pose.GetArrayElementAtIndex(i);
                 entry.FindPropertyRelative(nameof(FluffyBonePose.Rotation)).vector3Value =
                     NormalizeEuler(bones[i].localRotation.eulerAngles);
-                entry.FindPropertyRelative(nameof(FluffyBonePose.AngleLimit)).floatValue = FluffyBonePose.Free;
+                entry.FindPropertyRelative(nameof(FluffyBonePose.ForwardLimit)).floatValue = FluffyBonePose.Free;
+                entry.FindPropertyRelative(nameof(FluffyBonePose.BackwardLimit)).floatValue = FluffyBonePose.Free;
             }
         }
 
