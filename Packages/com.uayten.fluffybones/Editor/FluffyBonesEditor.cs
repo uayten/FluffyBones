@@ -40,6 +40,12 @@ namespace Fluffy.Editor
         private static GUIStyle AxisYStyle => _axisYStyle ??= AxisStyle(AxisYColor);
         private static GUIStyle AxisZStyle => _axisZStyle ??= AxisStyle(AxisZColor);
 
+        private static GUIStyle _sectionStyle;
+
+        /// <summary>A foldout that reads as a section header rather than a field.</summary>
+        private static GUIStyle SectionStyle =>
+            _sectionStyle ??= new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold };
+
         private static GUIStyle AxisStyle(Color color)
         {
             return new GUIStyle(EditorStyles.label)
@@ -63,8 +69,12 @@ namespace Fluffy.Editor
 
         private UnityEditor.Editor _profileEditor;
         private SerializedObject _poseSerialized;
-        private bool _showAdvanced;
+        private bool _chainExpanded = true;
+        private bool _poseExpanded = true;
+        private bool _rotationsExpanded = true;
+        private bool _behaviourExpanded = true;
         private bool _limitsExpanded;
+        private bool _showAdvanced;
         private int _editingChain;
 
         private void OnEnable()
@@ -98,27 +108,46 @@ namespace Fluffy.Editor
             serializedObject.Update();
 
             DrawMode();
-            EditorGUILayout.Space();
 
-            if ((FluffyChainMode)_mode.enumValueIndex == FluffyChainMode.Single)
+            bool isSingle = (FluffyChainMode)_mode.enumValueIndex == FluffyChainMode.Single;
+
+            if (DrawSection(isSingle ? "Chain" : "Chains", ref _chainExpanded))
             {
-                DrawSingleChain();
+                if (isSingle)
+                {
+                    DrawSingleChain();
+                }
+                else
+                {
+                    DrawMultipleChains();
+                }
             }
-            else
+
+            if (DrawSection("Default Pose", ref _poseExpanded))
             {
-                DrawMultipleChains();
+                DrawDefaultPose();
             }
 
-            EditorGUILayout.Space();
-            DrawDefaultPose();
+            if (DrawSection("Behaviour", ref _behaviourExpanded))
+            {
+                DrawProfile();
+            }
 
-            EditorGUILayout.Space();
-            DrawProfile();
-
-            EditorGUILayout.Space();
             DrawAdvanced();
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>
+        /// A section header that folds its contents away. Every part of the component
+        /// gets one, so a character with a dozen posed bones is still navigable.
+        /// </summary>
+        private static bool DrawSection(string title, ref bool expanded)
+        {
+            EditorGUILayout.Space();
+            expanded = EditorGUILayout.Foldout(expanded, title, true, SectionStyle);
+
+            return expanded;
         }
 
         private void DrawMode()
@@ -136,8 +165,6 @@ namespace Fluffy.Editor
 
         private void DrawSingleChain()
         {
-            EditorGUILayout.LabelField("Chain", EditorStyles.boldLabel);
-
             // Single mode edits one entry. Keeping the list at exactly one element
             // means there is no second copy of the data to fall out of sync.
             if (_chains.arraySize == 0)
@@ -176,7 +203,6 @@ namespace Fluffy.Editor
 
         private void DrawMultipleChains()
         {
-            EditorGUILayout.LabelField("Chains", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_chains, new GUIContent($"Chains ({_chains.arraySize})"), true);
 
             EditorGUILayout.Space(2f);
@@ -193,7 +219,6 @@ namespace Fluffy.Editor
         {
             var body = (FluffyBones)target;
 
-            EditorGUILayout.LabelField("Default Pose", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_showBones, new GUIContent("Show Bones"));
 
             EditorGUILayout.PropertyField(_showAxes, new GUIContent("Show Axes"));
@@ -256,8 +281,6 @@ namespace Fluffy.Editor
             List<Transform> bones = FluffyChain.CollectChain(startBone, lastBone);
             SerializedProperty poseAsset = chain.FindPropertyRelative("_pose");
 
-            DrawPoseAsset(poseAsset);
-
             // With an asset assigned, the rows edit the asset — which is what lets eight
             // skirt strands share one pose and be posed once.
             SerializedObject owner = ResolvePoseOwner(poseAsset, out SerializedProperty pose, chain);
@@ -265,36 +288,54 @@ namespace Fluffy.Editor
 
             SeedPose(pose, bones);
 
-            using (new EditorGUI.IndentLevelScope())
+            if (DrawSubSection("Chain Bones Rotation Asset", ref _rotationsExpanded))
             {
-                for (int i = 0; i < pose.arraySize; i++)
+                using (new EditorGUI.IndentLevelScope())
                 {
-                    SerializedProperty rotation = pose.GetArrayElementAtIndex(i)
-                        .FindPropertyRelative(nameof(FluffyBonePose.Rotation));
-
-                    if (i < bones.Count)
-                    {
-                        DrawBoneRotation(rotation, bones[i].name, bones[i]);
-                        continue;
-                    }
-
-                    // Entries past the end of this chain: a pose written for a longer one.
-                    // Shown greyed rather than hidden, so it is clear why the file is
-                    // bigger than the chain.
-                    using (new EditorGUI.DisabledScope(true))
-                    {
-                        DrawBoneRotation(rotation, $"(unused {i + 1})");
-                    }
+                    DrawPoseAsset(poseAsset);
+                    DrawRotationRows(pose, bones);
+                    DrawTrimButton(pose, bones.Count, owner);
                 }
             }
 
-            DrawTrimButton(pose, bones.Count, owner);
             DrawAngleLimits(pose, bones, owner, chain);
 
             if (owner != serializedObject)
             {
                 owner.ApplyModifiedProperties();
             }
+        }
+
+        private static void DrawRotationRows(SerializedProperty pose, List<Transform> bones)
+        {
+            for (int i = 0; i < pose.arraySize; i++)
+            {
+                SerializedProperty rotation = pose.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative(nameof(FluffyBonePose.Rotation));
+
+                if (i < bones.Count)
+                {
+                    DrawBoneRotation(rotation, bones[i].name, bones[i]);
+                    continue;
+                }
+
+                // Entries past the end of this chain: a pose written for a longer one.
+                // Shown greyed rather than hidden, so it is clear why the file is
+                // bigger than the chain.
+                using (new EditorGUI.DisabledScope(true))
+                {
+                    DrawBoneRotation(rotation, $"(unused {i + 1})");
+                }
+            }
+        }
+
+        /// <summary>A section nested inside another, so the hierarchy stays readable.</summary>
+        private static bool DrawSubSection(string title, ref bool expanded)
+        {
+            EditorGUILayout.Space(2f);
+            expanded = EditorGUILayout.Foldout(expanded, title, true);
+
+            return expanded;
         }
 
         /// <summary>
@@ -333,8 +374,7 @@ namespace Fluffy.Editor
         {
             EditorGUILayout.Space();
 
-            _limitsExpanded = EditorGUILayout.Foldout(_limitsExpanded, "Angle Limits", true);
-            if (!_limitsExpanded)
+            if (!DrawSubSection("Angle Limits", ref _limitsExpanded))
             {
                 return;
             }
@@ -762,8 +802,6 @@ namespace Fluffy.Editor
 
         private void DrawProfile()
         {
-            EditorGUILayout.LabelField("Behaviour", EditorStyles.boldLabel);
-
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.PropertyField(_profile, new GUIContent("Profile"));
@@ -821,8 +859,7 @@ namespace Fluffy.Editor
 
         private void DrawAdvanced()
         {
-            _showAdvanced = EditorGUILayout.Foldout(_showAdvanced, "Advanced", true);
-            if (!_showAdvanced)
+            if (!DrawSection("Advanced", ref _showAdvanced))
             {
                 return;
             }
