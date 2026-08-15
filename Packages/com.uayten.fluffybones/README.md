@@ -103,23 +103,26 @@ green, Z blue.
 
 ## Angle limits
 
-Under **Angle Limits**, each bone gets two caps on how far it may swing away from
-its pose, in degrees. 180 lets it go anywhere, which is the default; 0 pins it to
-the pose.
+Under **Angle Limits**, each bone gets a minimum and a maximum on each of its own
+axes, in degrees. -180 to 180 leaves an axis free, which is the default.
 
-The two are told apart by the character's facing:
+- **Y Swing** and **Z Swing** open the cone the bone moves inside.
+- **X Twist** is the roll along the bone, drawn as a circle.
 
-- **Backward** is where a bone flies when the character walks **forwards**.
-- **Forward** is where it goes when they walk **backwards**.
+Separate minimums and maximums are what a cape needs. Resting against the back,
+it should billow out when the character runs and barely move when they back up —
+so the axis that carries that motion gets a large limit one way and a small one
+the other. A single symmetric angle cannot express it: raise it and the cape
+swings wildly both ways, lower it and it never billows at all.
 
-That split is what a cape needs. A cape resting against the back should billow
-out when the character runs and barely move when they back up — so give it a
-large backward limit and a small forward one. A symmetric cap cannot express
-that: raise it and the cape swings wildly both ways, lower it and it never
-billows at all.
+For a skirt, tight limits on the upper bones are what keep a strand from folding
+through a leg, and there the two sides are usually equal.
 
-For a skirt, low limits on the upper bones are what keep a strand from folding
-through a leg, and there both sides are usually equal.
+Tick **Show Limits** to see them. The cone starts at the bone's head and is
+lopsided whenever a minimum and maximum differ, so a glance tells you which way a
+bone is free to go. The limits are read in the bone's own axes, which assumes the
+bone runs along its local X — the usual result of an export — so if a cone looks
+turned the wrong way, switch on **Show Axes** and check.
 
 The limits live in the same asset as the rotations, so they are shared and copied
 along with them. They are per bone rather than per profile because a limit

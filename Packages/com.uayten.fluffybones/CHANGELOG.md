@@ -42,12 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chain with the same bone count and the eight strands of a skirt are posed once.
   A pose longer than the chain hands its first entries to the bones that exist;
   the extras show greyed, with a button to drop them and save the file.
-- **Angle Limits**: per-bone caps, in degrees, on how far a bone may swing from
-  its pose — separately for each side. Backward is where a bone flies when the
-  character walks forwards, forward is where it goes when they back up, so a cape
-  can billow on the way out and stay put on the way back. 180 is free, 0 pins it.
-  Stored in the rotation asset beside the pose, so both are shared and copied
-  together.
+- **Angle Limits**: a minimum and a maximum per bone on each of its own axes. Y
+  and Z open the cone the bone swings inside, X is the twist along it. Separate
+  minimums and maximums make the cone lopsided, which is what lets a cape billow
+  far off the back and barely move the other way. Stored in the rotation asset
+  beside the pose, so both are shared and copied together.
+- **Show Limits**: draws the cone and the twist circle from each bone's head, in
+  its own colour.
 - **Copy this chain's setup to the others**: pushes one chain's pose asset, dummy
   bone settings and profile override onto every other chain, leaving their start
   and last bones alone.

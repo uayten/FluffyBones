@@ -20,6 +20,10 @@ namespace Fluffy
         private const float DefaultReturnStrength = 8f;
         private const float DefaultDrag = 0.15f;
         private const float MinBoneLength = 1e-5f;
+        private const int ConeSegments = 32;
+        private const float ConeScale = 0.8f;
+        private const float TwistCircleScale = 0.35f;
+        private const float TwistCircleOffset = 0.5f;
 
         [Tooltip("Where the chain starts. Everything below it comes along, following " +
                  "the first child of each bone.")]
@@ -159,8 +163,8 @@ namespace Fluffy
                 _joints.Add(new Joint
                 {
                     Transform = bone,
-                    ForwardLimit = limits.ForwardLimit,
-                    BackwardLimit = limits.BackwardLimit,
+                    SwingYLimit = limits.SwingYLimit,
+                    SwingZLimit = limits.SwingZLimit,
                     RestLocalRotation = restRotations[i],
                     BoneAxis = Quaternion.Inverse(bone.rotation) * ((tip - bone.position) / length),
                     Length = length,
@@ -203,11 +207,7 @@ namespace Fluffy
         /// <summary>Advances the chain by one step.</summary>
         /// <param name="deltaTime">Seconds since the last step.</param>
         /// <param name="fallbackProfile">Used when the chain has no override of its own.</param>
-        /// <param name="characterForward">
-        /// Which way the character faces, in world space. Tells the two angle limits
-        /// apart: a bone swinging towards it is limited by the forward one.
-        /// </param>
-        public void Simulate(float deltaTime, FluffyProfile fallbackProfile, Vector3 characterForward)
+        public void Simulate(float deltaTime, FluffyProfile fallbackProfile)
         {
             if (!_isBuilt || deltaTime <= 0f)
             {
@@ -245,7 +245,7 @@ namespace Fluffy
                 Vector3 offset = nextTip - position;
                 float distance = offset.magnitude;
                 Vector3 direction = distance < MinBoneLength ? restDirection : offset / distance;
-                direction = ApplyAngleLimit(joint, restDirection, direction, characterForward);
+                direction = ApplyAngleLimits(joint, restRotation, direction);
 
                 nextTip = position + direction * joint.Length;
 
@@ -257,35 +257,66 @@ namespace Fluffy
         }
 
         /// <summary>
-        /// Holds a bone inside the arc it is allowed to swing through.
+        /// Holds a bone inside the cone it is allowed to swing through.
         /// </summary>
         /// <remarks>
-        /// The two limits are told apart by which way the bone has moved relative to the
-        /// character's facing. A cape resting against the back flies backwards when the
-        /// character walks forwards, and forwards when they back up — so a big backward
-        /// limit with a small forward one gives a cape that billows on the way out and
-        /// stays put on the way back.
+        /// The swing is split into how far the bone has tipped towards its own Y and
+        /// towards its own Z, each clamped against its own minimum and maximum. Two
+        /// independent ranges rather than one angle is what makes the cone lopsided:
+        /// a cape can be given a lot of room on one side and almost none on the other.
         /// </remarks>
-        private static Vector3 ApplyAngleLimit(
-            Joint joint, Vector3 restDirection, Vector3 direction, Vector3 characterForward)
+        private static Vector3 ApplyAngleLimits(Joint joint, Quaternion restRotation, Vector3 direction)
         {
-            bool towardsFront = Vector3.Dot(direction - restDirection, characterForward) >= 0f;
-            float limit = towardsFront ? joint.ForwardLimit : joint.BackwardLimit;
-
-            if (limit >= FluffyBonePose.Free)
+            if (FluffyBonePose.IsFree(joint.SwingYLimit) && FluffyBonePose.IsFree(joint.SwingZLimit))
             {
                 return direction;
             }
 
-            float swing = Vector3.Angle(restDirection, direction);
-            if (swing <= limit)
+            // Into the bone's rest frame, where the limits are expressed.
+            Vector3 local = Quaternion.Inverse(restRotation) * direction;
+            BuildSwingFrame(joint.BoneAxis, out Vector3 towardsY, out Vector3 towardsZ);
+
+            float swingY = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsY), -1f, 1f)) * Mathf.Rad2Deg;
+            float swingZ = Mathf.Asin(Mathf.Clamp(Vector3.Dot(local, towardsZ), -1f, 1f)) * Mathf.Rad2Deg;
+
+            float clampedY = Mathf.Clamp(swingY, joint.SwingYLimit.x, joint.SwingYLimit.y);
+            float clampedZ = Mathf.Clamp(swingZ, joint.SwingZLimit.x, joint.SwingZLimit.y);
+
+            if (Mathf.Approximately(clampedY, swingY) && Mathf.Approximately(clampedZ, swingZ))
             {
                 return direction;
             }
 
-            // Pull the direction back towards the rest pose until it sits on the edge of
-            // the arc rather than past it.
-            return Vector3.RotateTowards(restDirection, direction, limit * Mathf.Deg2Rad, 0f);
+            return restRotation * SwingToDirection(joint.BoneAxis, towardsY, towardsZ, clampedY, clampedZ);
+        }
+
+        /// <summary>
+        /// The bone's local Y and Z, squared up against the bone's own axis so the two
+        /// swings stay independent of each other.
+        /// </summary>
+        private static void BuildSwingFrame(Vector3 axis, out Vector3 towardsY, out Vector3 towardsZ)
+        {
+            towardsY = Vector3.ProjectOnPlane(Vector3.up, axis);
+
+            // A bone that runs along Y has no Y left to swing towards; borrow another.
+            if (towardsY.sqrMagnitude < MinBoneLength)
+            {
+                towardsY = Vector3.ProjectOnPlane(Vector3.forward, axis);
+            }
+
+            towardsY.Normalize();
+            towardsZ = Vector3.Cross(axis, towardsY);
+        }
+
+        /// <summary>Rebuilds a direction from how far it tips towards each axis.</summary>
+        private static Vector3 SwingToDirection(
+            Vector3 axis, Vector3 towardsY, Vector3 towardsZ, float degreesY, float degreesZ)
+        {
+            float y = Mathf.Sin(degreesY * Mathf.Deg2Rad);
+            float z = Mathf.Sin(degreesZ * Mathf.Deg2Rad);
+            float along = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y - z * z));
+
+            return (axis * along + towardsY * y + towardsZ * z).normalized;
         }
 
         /// <summary>
@@ -318,6 +349,117 @@ namespace Fluffy
             }
 
             Gizmos.color = color;
+        }
+
+        /// <summary>
+        /// Draws the arc each bone is allowed to move in, starting at the bone's head:
+        /// a cone for the Y and Z swing, and a circle around the bone for the X twist.
+        /// </summary>
+        /// <remarks>
+        /// The cone is lopsided when the minimum and maximum of an axis differ, which is
+        /// the whole point of having two — it shows at a glance that a cape may fly far
+        /// one way and barely move the other.
+        /// </remarks>
+        public void DrawLimitGizmos()
+        {
+            if (_startBone == null)
+            {
+                return;
+            }
+
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                Transform bone = bones[i];
+                Vector3 head = bone.position;
+                Vector3 toTip = ResolveTip(bones, i) - head;
+                float length = toTip.magnitude;
+
+                if (length < MinBoneLength)
+                {
+                    continue;
+                }
+
+                FluffyBonePose limits = ResolveLimits(i);
+                Vector3 axis = toTip / length;
+                BuildSwingFrame(axis, out Vector3 towardsY, out Vector3 towardsZ);
+
+                DrawSwingCone(head, axis, towardsY, towardsZ, limits, length * ConeScale);
+                DrawTwistCircle(head, axis, towardsY, towardsZ, limits, length * ConeScale);
+            }
+        }
+
+        private static void DrawSwingCone(
+            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ, FluffyBonePose limits, float length)
+        {
+            if (FluffyBonePose.IsFree(limits.SwingYLimit) && FluffyBonePose.IsFree(limits.SwingZLimit))
+            {
+                return;
+            }
+
+            Vector3 previous = Vector3.zero;
+
+            for (int step = 0; step <= ConeSegments; step++)
+            {
+                float around = step / (float)ConeSegments * Mathf.PI * 2f;
+                float cos = Mathf.Cos(around);
+                float sin = Mathf.Sin(around);
+
+                // Each quadrant of the rim uses the limit facing that way, which is what
+                // makes the cone lopsided rather than a plain ellipse.
+                float degreesY = (cos >= 0f ? limits.SwingYLimit.y : -limits.SwingYLimit.x) * Mathf.Abs(cos);
+                float degreesZ = (sin >= 0f ? limits.SwingZLimit.y : -limits.SwingZLimit.x) * Mathf.Abs(sin);
+
+                Vector3 rim = head + SwingToDirection(
+                    axis, towardsY, towardsZ,
+                    cos >= 0f ? degreesY : -degreesY,
+                    sin >= 0f ? degreesZ : -degreesZ) * length;
+
+                if (step > 0)
+                {
+                    Gizmos.DrawLine(previous, rim);
+                }
+
+                if (step % (ConeSegments / 8) == 0)
+                {
+                    Gizmos.DrawLine(head, rim);
+                }
+
+                previous = rim;
+            }
+        }
+
+        private static void DrawTwistCircle(
+            Vector3 head, Vector3 axis, Vector3 towardsY, Vector3 towardsZ, FluffyBonePose limits, float length)
+        {
+            if (FluffyBonePose.IsFree(limits.TwistLimit))
+            {
+                return;
+            }
+
+            float radius = length * TwistCircleScale;
+            Vector3 centre = head + axis * (length * TwistCircleOffset);
+            Vector3 previous = centre + towardsY * radius;
+
+            for (int step = 1; step <= ConeSegments; step++)
+            {
+                float around = step / (float)ConeSegments * Mathf.PI * 2f;
+                Vector3 point = centre + (towardsY * Mathf.Cos(around) + towardsZ * Mathf.Sin(around)) * radius;
+                Gizmos.DrawLine(previous, point);
+                previous = point;
+            }
+
+            // Two spokes marking where the twist is allowed to stop.
+            DrawTwistSpoke(centre, towardsY, towardsZ, radius, limits.TwistLimit.x);
+            DrawTwistSpoke(centre, towardsY, towardsZ, radius, limits.TwistLimit.y);
+        }
+
+        private static void DrawTwistSpoke(
+            Vector3 centre, Vector3 towardsY, Vector3 towardsZ, float radius, float degrees)
+        {
+            float radians = degrees * Mathf.Deg2Rad;
+            Gizmos.DrawLine(centre, centre + (towardsY * Mathf.Cos(radians) + towardsZ * Mathf.Sin(radians)) * radius);
         }
 
         /// <summary>
@@ -449,8 +591,9 @@ namespace Fluffy
                 {
                     // Capture reads rotations off the scene; the limits were authored and
                     // have nothing to do with where the bones happen to be.
-                    ForwardLimit = kept ? existing[i].ForwardLimit : FluffyBonePose.Free,
-                    BackwardLimit = kept ? existing[i].BackwardLimit : FluffyBonePose.Free
+                    SwingYLimit = kept ? existing[i].SwingYLimit : FluffyBonePose.FreeRange,
+                    SwingZLimit = kept ? existing[i].SwingZLimit : FluffyBonePose.FreeRange,
+                    TwistLimit = kept ? existing[i].TwistLimit : FluffyBonePose.FreeRange
                 };
             }
 
@@ -663,11 +806,11 @@ namespace Fluffy
             /// <summary>Rest distance from the bone's head to its tip, in world units.</summary>
             public float Length;
 
-            /// <summary>How far the bone may swing towards the character's front, in degrees.</summary>
-            public float ForwardLimit;
+            /// <summary>Min and max swing towards the bone's local Y, in degrees.</summary>
+            public Vector2 SwingYLimit;
 
-            /// <summary>How far the bone may swing towards the character's back, in degrees.</summary>
-            public float BackwardLimit;
+            /// <summary>Min and max swing towards the bone's local Z, in degrees.</summary>
+            public Vector2 SwingZLimit;
 
             /// <summary>Position along the chain: 0 at the root, 1 at the tip.</summary>
             public float NormalizedDepth;

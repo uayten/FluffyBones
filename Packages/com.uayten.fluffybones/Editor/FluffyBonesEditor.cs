@@ -56,12 +56,14 @@ namespace Fluffy.Editor
         private SerializedProperty _teleportThreshold;
         private SerializedProperty _showBones;
         private SerializedProperty _showAxes;
+        private SerializedProperty _showLimits;
         private SerializedProperty _boneColor;
+        private SerializedProperty _limitColor;
 
         private UnityEditor.Editor _profileEditor;
         private SerializedObject _poseSerialized;
         private bool _showAdvanced;
-        private bool _showLimits;
+        private bool _limitsExpanded;
         private int _editingChain;
 
         private void OnEnable()
@@ -73,7 +75,9 @@ namespace Fluffy.Editor
             _teleportThreshold = serializedObject.FindProperty("_teleportThreshold");
             _showBones = serializedObject.FindProperty("_showBones");
             _showAxes = serializedObject.FindProperty("_showAxes");
+            _showLimits = serializedObject.FindProperty("_showLimits");
             _boneColor = serializedObject.FindProperty("_boneColor");
+            _limitColor = serializedObject.FindProperty("_limitColor");
         }
 
         private void OnDisable()
@@ -327,70 +331,83 @@ namespace Fluffy.Editor
         {
             EditorGUILayout.Space();
 
-            _showLimits = EditorGUILayout.Foldout(_showLimits, "Angle Limits", true);
-            if (!_showLimits)
+            _limitsExpanded = EditorGUILayout.Foldout(_limitsExpanded, "Angle Limits", true);
+            if (!_limitsExpanded)
             {
                 return;
             }
 
+            EditorGUILayout.PropertyField(_showLimits, new GUIContent("Show Limits"));
+
+            if (_showLimits.boolValue)
+            {
+                EditorGUILayout.PropertyField(_limitColor, new GUIContent("Limit Colour"));
+            }
+
             EditorGUILayout.HelpBox(
-                "How far each bone may swing away from its pose, in degrees. 180 lets it go "
-                + "anywhere, 0 pins it. Forward is the way a bone goes when the character "
-                + "walks backwards; backward is where it flies when they walk forwards.",
+                "How far each bone may swing from its pose, in degrees, per axis. Y and Z "
+                + "open the cone drawn in the scene; X is the twist along the bone, drawn "
+                + "as a circle. -180 to 180 leaves an axis free.",
                 MessageType.None);
 
             using (new EditorGUI.IndentLevelScope())
             {
-                DrawLimitHeader();
-
                 int count = Mathf.Min(pose.arraySize, bones.Count);
                 for (int i = 0; i < count; i++)
                 {
-                    SerializedProperty entry = pose.GetArrayElementAtIndex(i);
-                    DrawBoneLimits(
-                        entry.FindPropertyRelative(nameof(FluffyBonePose.ForwardLimit)),
-                        entry.FindPropertyRelative(nameof(FluffyBonePose.BackwardLimit)),
-                        bones[i].name);
+                    DrawBoneLimits(pose.GetArrayElementAtIndex(i), bones[i].name);
                 }
             }
         }
 
-        private static void DrawLimitHeader()
+        /// <summary>
+        /// One bone's three axis ranges, behind a foldout. Six numbers on a row would be
+        /// unreadable, and most bones never need opening.
+        /// </summary>
+        private static void DrawBoneLimits(SerializedProperty entry, string label)
         {
-            Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
-            SplitLimitRow(row, out Rect _, out Rect forward, out Rect backward);
+            entry.isExpanded = EditorGUILayout.Foldout(entry.isExpanded, label, true);
+            if (!entry.isExpanded)
+            {
+                return;
+            }
 
-            int indent = EditorGUI.indentLevel;
-            EditorGUI.indentLevel = 0;
-
-            EditorGUI.LabelField(forward, "Forward", EditorStyles.miniLabel);
-            EditorGUI.LabelField(backward, "Backward", EditorStyles.miniLabel);
-
-            EditorGUI.indentLevel = indent;
+            using (new EditorGUI.IndentLevelScope())
+            {
+                DrawRange(entry.FindPropertyRelative(nameof(FluffyBonePose.SwingYLimit)), "Y Swing");
+                DrawRange(entry.FindPropertyRelative(nameof(FluffyBonePose.SwingZLimit)), "Z Swing");
+                DrawRange(entry.FindPropertyRelative(nameof(FluffyBonePose.TwistLimit)), "X Twist");
+            }
         }
 
-        private static void DrawBoneLimits(SerializedProperty forward, SerializedProperty backward, string label)
+        /// <summary>A minimum and a maximum in degrees, side by side.</summary>
+        private static void DrawRange(SerializedProperty range, string label)
         {
             Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
-            SplitLimitRow(row, out Rect nameRect, out Rect forwardRect, out Rect backwardRect);
 
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
 
+            var nameRect = new Rect(row.x, row.y, BoneLabelWidth, row.height);
             EditorGUI.LabelField(nameRect, label, EditorStyles.label);
-            EditorGUI.PropertyField(forwardRect, forward, GUIContent.none);
-            EditorGUI.PropertyField(backwardRect, backward, GUIContent.none);
-
-            EditorGUI.indentLevel = indent;
-        }
-
-        private static void SplitLimitRow(Rect row, out Rect name, out Rect forward, out Rect backward)
-        {
-            name = new Rect(row.x, row.y, BoneLabelWidth, row.height);
 
             float width = (row.width - BoneLabelWidth - AxisSpacing) / 2f;
-            forward = new Rect(row.x + BoneLabelWidth, row.y, width, row.height);
-            backward = new Rect(forward.xMax + AxisSpacing, row.y, width, row.height);
+            var minRect = new Rect(row.x + BoneLabelWidth, row.y, width, row.height);
+            var maxRect = new Rect(minRect.xMax + AxisSpacing, row.y, width, row.height);
+
+            Vector2 value = range.vector2Value;
+
+            EditorGUI.BeginChangeCheck();
+            float min = ClampAngle(EditorGUI.FloatField(minRect, value.x));
+            float max = ClampAngle(EditorGUI.FloatField(maxRect, value.y));
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                // A maximum below the minimum would be an arc the bone can never satisfy.
+                range.vector2Value = new Vector2(Mathf.Min(min, max), Mathf.Max(min, max));
+            }
+
+            EditorGUI.indentLevel = indent;
         }
 
         private void DrawPoseAsset(SerializedProperty poseAsset)
@@ -462,8 +479,9 @@ namespace Fluffy.Editor
                 SerializedProperty entry = pose.GetArrayElementAtIndex(i);
                 entry.FindPropertyRelative(nameof(FluffyBonePose.Rotation)).vector3Value =
                     NormalizeEuler(bones[i].localRotation.eulerAngles);
-                entry.FindPropertyRelative(nameof(FluffyBonePose.ForwardLimit)).floatValue = FluffyBonePose.Free;
-                entry.FindPropertyRelative(nameof(FluffyBonePose.BackwardLimit)).floatValue = FluffyBonePose.Free;
+                entry.FindPropertyRelative(nameof(FluffyBonePose.SwingYLimit)).vector2Value = FluffyBonePose.FreeRange;
+                entry.FindPropertyRelative(nameof(FluffyBonePose.SwingZLimit)).vector2Value = FluffyBonePose.FreeRange;
+                entry.FindPropertyRelative(nameof(FluffyBonePose.TwistLimit)).vector2Value = FluffyBonePose.FreeRange;
             }
         }
 

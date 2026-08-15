@@ -63,6 +63,13 @@ namespace Fluffy
                  "point decides how the bone swings.")]
         [SerializeField] private bool _showAxes;
 
+        [Tooltip("Draw the arc each bone may move in: a cone for the Y and Z swing, and " +
+                 "a circle around the bone for the X twist.")]
+        [SerializeField] private bool _showLimits;
+
+        [Tooltip("Colour of the drawn limits.")]
+        [SerializeField] private Color _limitColor = new Color(1f, 0.85f, 0.35f, 0.9f);
+
         private Vector3 _lastPosition;
 
 #if UNITY_EDITOR
@@ -130,10 +137,9 @@ namespace Fluffy
                 return;
             }
 
-            Vector3 forward = transform.forward;
             for (int i = 0; i < _chains.Count; i++)
             {
-                _chains[i].Simulate(deltaTime, _profile, forward);
+                _chains[i].Simulate(deltaTime, _profile);
             }
         }
 
@@ -336,10 +342,10 @@ namespace Fluffy
 
         private void OnDrawGizmos()
         {
-            Gizmos.color = _boneColor;
-
             for (int i = 0; i < _chains.Count; i++)
             {
+                Gizmos.color = _boneColor;
+
                 if (_showBones)
                 {
                     _chains[i].DrawBoneGizmos();
@@ -348,6 +354,12 @@ namespace Fluffy
                 if (_showAxes)
                 {
                     _chains[i].DrawAxisGizmos();
+                }
+
+                if (_showLimits)
+                {
+                    Gizmos.color = _limitColor;
+                    _chains[i].DrawLimitGizmos();
                 }
             }
         }
