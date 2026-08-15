@@ -11,7 +11,7 @@ namespace Fluffy
     /// <remarks>
     /// Not a component: chains live in a list on the character's
     /// <see cref="FluffyBones"/> component, which owns them and steps them. The
-    /// bones are taken from the hierarchy below <see cref="RootBone"/>, following
+    /// bones run from <see cref="StartBone"/> to <see cref="LastBone"/>, following
     /// the first child of each bone.
     /// </remarks>
     [Serializable]
@@ -21,17 +21,16 @@ namespace Fluffy
         private const float DefaultDrag = 0.15f;
         private const float MinBoneLength = 1e-5f;
 
-        [Tooltip("First bone of the chain. Everything below it comes along, " +
-                 "following the first child of each bone.")]
-        [SerializeField] private Transform _rootBone;
+        [Tooltip("Where the chain starts. Everything below it comes along, following " +
+                 "the first child of each bone.")]
+        [SerializeField] private Transform _startBone;
+
+        [Tooltip("Where the chain stops, included. Leave empty to run all the way to " +
+                 "the end of the hierarchy.")]
+        [SerializeField] private Transform _lastBone;
 
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
-
-        [Tooltip("Virtual bone length past the last real bone, in world units, so the " +
-                 "tip swings too. 0 leaves the last bone rigid.")]
-        [Min(0f)]
-        [SerializeField] private float _tipLength = 0.05f;
 
         private readonly List<Joint> _joints = new List<Joint>();
         private bool _isBuilt;
@@ -41,17 +40,24 @@ namespace Fluffy
         {
         }
 
-        /// <summary>Creates a chain rooted at <paramref name="rootBone"/>.</summary>
-        public FluffyChain(Transform rootBone)
+        /// <summary>Creates a chain starting at <paramref name="startBone"/>.</summary>
+        public FluffyChain(Transform startBone)
         {
-            _rootBone = rootBone;
+            _startBone = startBone;
         }
 
-        /// <summary>First bone of the chain.</summary>
-        public Transform RootBone
+        /// <summary>Where the chain starts.</summary>
+        public Transform StartBone
         {
-            get => _rootBone;
-            set => _rootBone = value;
+            get => _startBone;
+            set => _startBone = value;
+        }
+
+        /// <summary>Where the chain stops, included. Null runs to the end of the hierarchy.</summary>
+        public Transform LastBone
+        {
+            get => _lastBone;
+            set => _lastBone = value;
         }
 
         /// <summary>Tuning for this chain alone, or null to use the body's profile.</summary>
@@ -78,27 +84,29 @@ namespace Fluffy
             _isBuilt = false;
             _joints.Clear();
 
-            if (_rootBone == null)
+            if (_startBone == null)
             {
                 return false;
             }
 
-            List<Transform> bones = CollectChain(_rootBone);
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
             if (bones.Count < 2)
             {
-                Debug.LogWarning($"[Fluffy Bones] Chain '{_rootBone.name}' needs at least two bones — " +
-                                 "the root and one child. Nothing to simulate.", context);
+                Debug.LogWarning($"[Fluffy Bones] Chain '{_startBone.name}' needs at least two bones — " +
+                                 "the start bone and one child. Nothing to simulate.", context);
                 return false;
+            }
+
+            if (_lastBone != null && bones[bones.Count - 1] != _lastBone)
+            {
+                Debug.LogWarning($"[Fluffy Bones] '{_lastBone.name}' is not below '{_startBone.name}' in the " +
+                                 "hierarchy, so the chain runs to the end instead of stopping there.", context);
             }
 
             for (int i = 0; i < bones.Count; i++)
             {
                 Transform bone = bones[i];
-                bool isLeaf = i == bones.Count - 1;
-                Vector3 tip = isLeaf
-                    ? bone.position + (bone.position - bones[i - 1].position).normalized * _tipLength
-                    : bones[i + 1].position;
-
+                Vector3 tip = ResolveTip(bones, i);
                 float length = Vector3.Distance(bone.position, tip);
                 if (length < MinBoneLength)
                 {
@@ -215,13 +223,13 @@ namespace Fluffy
                 return;
             }
 
-            if (_rootBone == null)
+            if (_startBone == null)
             {
                 return;
             }
 
             // Not playing: preview the bones the solver would pick up.
-            List<Transform> bones = CollectChain(_rootBone);
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
             for (int i = 0; i < bones.Count - 1; i++)
             {
                 Gizmos.DrawLine(bones[i].position, bones[i + 1].position);
@@ -230,21 +238,53 @@ namespace Fluffy
         }
 
         /// <summary>
-        /// Follows the first child of each bone down from <paramref name="root"/>, which
+        /// Follows the first child of each bone down from <paramref name="start"/>, which
         /// is how a tail, a hair strand or a skirt panel is normally rigged.
         /// </summary>
-        public static List<Transform> CollectChain(Transform root)
+        /// <param name="start">Where the chain starts.</param>
+        /// <param name="last">Where to stop, included. Null runs to the end of the hierarchy.</param>
+        public static List<Transform> CollectChain(Transform start, Transform last = null)
         {
             var bones = new List<Transform>();
-            Transform current = root;
+            Transform current = start;
 
             while (current != null)
             {
                 bones.Add(current);
+
+                if (last != null && current == last)
+                {
+                    break;
+                }
+
                 current = current.childCount > 0 ? current.GetChild(0) : null;
             }
 
             return bones;
+        }
+
+        /// <summary>
+        /// Where the bone at <paramref name="index"/> points. Every bone aims at the next
+        /// one in the chain; the final bone aims at whatever the rig has past it, or, when
+        /// it is a real leaf, at a virtual point one bone-length further on so it still swings.
+        /// </summary>
+        private static Vector3 ResolveTip(List<Transform> bones, int index)
+        {
+            Transform bone = bones[index];
+
+            if (index < bones.Count - 1)
+            {
+                return bones[index + 1].position;
+            }
+
+            if (bone.childCount > 0)
+            {
+                // The chain was cut short by Last Bone. The bone below is not simulated,
+                // but it still marks the direction this one rests in.
+                return bone.GetChild(0).position;
+            }
+
+            return bone.position + (bone.position - bones[index - 1].position);
         }
 
         /// <summary>Per-bone simulation state, cached at build time.</summary>

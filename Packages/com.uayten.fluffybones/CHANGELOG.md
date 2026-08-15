@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Minimum supported version raised to Unity 6.
+- A chain is bounded by **Start Bone** and **Last Bone** instead of a root bone
+  plus a tip length. Last Bone is optional and, when set, the bone below it in
+  the rig is left alone but still aims the final simulated bone; a chain that
+  ends at a real leaf extends by one bone length so its end still swings.
 - `FluffyChain` is no longer a `MonoBehaviour`. Chains are entries in a list on
   the `FluffyBones` component instead of a component per bone.
 - Namespace is `Fluffy`, not `FluffyBones`. The component had to be named

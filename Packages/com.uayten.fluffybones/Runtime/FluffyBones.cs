@@ -190,7 +190,7 @@ namespace Fluffy
         {
             for (int i = 0; i < _chains.Count; i++)
             {
-                if (_chains[i].RootBone == bone)
+                if (_chains[i].StartBone == bone)
                 {
                     return true;
                 }

@@ -30,12 +30,15 @@ The path is relative to the consuming project's `Packages` folder.
 1. Add **Fluffy Bones** to the character root. One component per character — not
    one per bone.
 2. Choose the mode at the top:
-   - **Single** — one chain. Drag in the first bone of the tail and you are done.
+   - **Single** — one chain. Drag the first bone of the tail into **Start Bone**
+     and you are done. **Last Bone** is optional: leave it empty and the chain
+     runs to the end of the hierarchy; set it to stop earlier, which is how you
+     keep the solver off a bone that is rigged for something else.
    - **Multiple** — many chains sharing one profile, which is what a skirt is.
      Press **Detect chains** to scan the skeleton for bones named `tail`,
      `skirt`, `hair`, `cape` and friends. Bones inside a chain already found are
      skipped, so `tail_02` does not start a second one. Anything it misses, drag
-     the root bone into the list by hand.
+     the start bone into the list by hand.
 3. Press play and move the character. The bones lag behind and swing back.
 
 A **profile** is the behaviour asset. New components start on `FluffyGeneric`,
@@ -50,11 +53,10 @@ for a variant, edit it and every chain using it updates at once.
 | Parameter | What it does |
 | --- | --- |
 | Stiffness | How hard the chain returns to the animated pose. 0 leaves it limp. |
-| Stiffness Falloff | Scales stiffness from root (0) to tip (1). Lower at the tip whips more. |
+| Stiffness Falloff | Scales stiffness from start (0) to end (1). Lower at the end whips more. |
 | Drag | Motion bled off each frame. 0 swings forever, 1 kills it instantly. |
 | Gravity | Constant world acceleration. A light droop reads better than -9.81. |
-| Tip Length | Virtual bone past the last real one, so the tip swings too. |
-| Teleport Threshold | Root movement in one frame that snaps the chain back to rest. |
+| Teleport Threshold | Character movement in one frame that snaps the chains back to rest. |
 
 ## Contents
 
