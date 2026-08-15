@@ -152,6 +152,15 @@ namespace Fluffy.Editor
                 return;
             }
 
+            bool isReadOnly = IsInImmutablePackage(_profile.objectReferenceValue);
+            if (isReadOnly)
+            {
+                EditorGUILayout.HelpBox(
+                    "This profile ships with Fluffy Bones and cannot be edited. "
+                    + "Press Duplicate to get a copy of your own.",
+                    MessageType.None);
+            }
+
             // The profile's own inspector, drawn inline: edits here write straight to
             // the asset, so every chain and character using it updates at once.
             CreateCachedEditor(_profile.objectReferenceValue, null, ref _profileEditor);
@@ -161,6 +170,7 @@ namespace Fluffy.Editor
             }
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUI.DisabledScope(isReadOnly))
             {
                 _profileEditor.OnInspectorGUI();
             }
@@ -190,6 +200,27 @@ namespace Fluffy.Editor
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Whether the asset lives in a package Unity treats as immutable — which is
+        /// how every profile shipped inside Fluffy Bones reaches a customer. Embedded
+        /// and local packages stay editable, so the plugin's own project can tune them.
+        /// </summary>
+        private static bool IsInImmutablePackage(Object asset)
+        {
+            string path = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            UnityEditor.PackageManager.PackageInfo package =
+                UnityEditor.PackageManager.PackageInfo.FindForAssetPath(path);
+
+            return package != null
+                   && package.source != UnityEditor.PackageManager.PackageSource.Embedded
+                   && package.source != UnityEditor.PackageManager.PackageSource.Local;
         }
 
         private void DetectChains()

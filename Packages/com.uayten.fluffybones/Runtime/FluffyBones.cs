@@ -54,6 +54,24 @@ namespace Fluffy
 
         private Vector3 _lastPosition;
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// The profile shipped with the package, assigned to new components so they
+        /// behave sensibly before anyone touches a slider. Read-only for anyone who
+        /// installed Fluffy Bones as a package — duplicate it to tune.
+        /// </summary>
+        private const string GenericProfilePath =
+            "Packages/com.uayten.fluffybones/Runtime/Profiles/FluffyGeneric.asset";
+
+        private void Reset()
+        {
+            if (_profile == null)
+            {
+                _profile = UnityEditor.AssetDatabase.LoadAssetAtPath<FluffyProfile>(GenericProfilePath);
+            }
+        }
+#endif
+
         /// <summary>Whether this character drives one chain or several.</summary>
         public FluffyChainMode Mode
         {

@@ -36,14 +36,16 @@ The path is relative to the consuming project's `Packages` folder.
      `skirt`, `hair`, `cape` and friends. Bones inside a chain already found are
      skipped, so `tail_02` does not start a second one. Anything it misses, drag
      the root bone into the list by hand.
-3. Assign a **profile** — the behaviour asset. **New** creates one, **Duplicate**
-   copies the current one to tweak from, and its settings are drawn right there
-   in the component, so you tune without leaving the character. With no profile
-   assigned the chains fall back to their built-in defaults.
-4. Press play and move the character. The bones lag behind and swing back.
+3. Press play and move the character. The bones lag behind and swing back.
 
-A profile is a normal asset: reuse it across chains and characters, duplicate it
-for a variant, edit it and every user updates at once.
+A **profile** is the behaviour asset. New components start on `FluffyGeneric`,
+which ships with the package, so a chain behaves sensibly before you touch a
+slider. That one is read-only — press **Duplicate** to get a copy you can tune,
+or **New** for an empty one. Its settings are drawn right there in the
+component, so you never leave the character to adjust them.
+
+Profiles are normal assets: reuse one across chains and characters, duplicate it
+for a variant, edit it and every chain using it updates at once.
 
 | Parameter | What it does |
 | --- | --- |

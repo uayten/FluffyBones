@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finds tails, skirts, hair and capes by bone name and adds a chain for each.
 - Profile slot with **New** and **Duplicate**, and the profile's settings drawn
   inline in the component so chains are tuned without leaving the character.
+- `FluffyGeneric`, a profile shipped inside the package and assigned to new
+  components, so a chain works before anything is configured. It is read-only
+  wherever the package is installed as a package; the inspector says so and
+  points at Duplicate.
 - `FluffyChain`: chains are collected from the bone hierarchy and simulated with
   Verlet integration and a rigid-length constraint, so bones lag behind the
   animated pose and swing back to it.
