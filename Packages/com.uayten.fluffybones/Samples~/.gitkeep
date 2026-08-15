@@ -1,0 +1,3 @@
+# Samples~ — cenas e assets de demonstração.
+# A tilde no nome faz a Unity ignorar a pasta; o Package Manager importa o
+# conteúdo sob demanda, a partir do campo "samples" do package.json.

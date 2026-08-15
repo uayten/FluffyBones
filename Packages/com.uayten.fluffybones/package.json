@@ -1,0 +1,20 @@
+{
+  "name": "com.uayten.fluffybones",
+  "displayName": "Fluffy Bones",
+  "version": "0.0.1",
+  "unity": "2022.3",
+  "description": "Cute bone physics for Unity. Secondary motion for tails, skirts, capes, chains and hair — drop a component on a bone chain and it wiggles.",
+  "author": {
+    "name": "uayten"
+  },
+  "keywords": [
+    "spring bone",
+    "bone physics",
+    "tail",
+    "skirt",
+    "cape",
+    "hair"
+  ],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "hideInEditor": false
+}
