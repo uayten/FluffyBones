@@ -129,6 +129,15 @@ needs to differ gets **Override** ticked and its own three axes; **Reset to
 global** puts it back. That is the usual shape of a chain: the whole cape moves
 alike except the two bones at the shoulders.
 
+> **Keep a global limit symmetric.** Each bone's Y and Z are its own, and a chain
+> that curls turns them as it goes: on a hanging tail, the first bone's Y points
+> one way in the world and the last bone's Y points the opposite way. A range of
+> -25 to 0 therefore means "may lag backwards" on one bone and "may lag forwards"
+> on another, so moving the character one way frees half the chain and welds the
+> other half to it. Symmetric ranges do not care which way the frame is turned.
+> An asymmetric range belongs on one bone at a time, through **Override**, where
+> you can see which way that bone's axes point.
+
 Separate minimums and maximums are what a cape needs. Resting against the back,
 it should billow out when the character runs and barely move when they back up —
 so the axis that carries that motion gets a large limit one way and a small one
