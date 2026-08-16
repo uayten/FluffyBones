@@ -44,6 +44,11 @@
 *.gitattributes   text eol=lf
 *.gitignore       text eol=lf
 
+# As skills são geradas pelo plugin de MCP, que as grava em CRLF. Guardadas em LF
+# como todo o resto; CRLF na cópia de trabalho para o botão Generate não sujar o
+# status a cada clique.
+.claude/skills/**/*.md text eol=crlf
+
 # ---------------------------------------------------------------------------
 # Git LFS — binários
 # ---------------------------------------------------------------------------
