@@ -59,6 +59,18 @@ crashlytics-build.properties
 *_BackUpThisFolder_ButDontShipItWithYourGame*/
 
 # ---------------------------------------------------------------------------
+# Restored by the MCP plugin
+# ---------------------------------------------------------------------------
+# Eighteen megabytes of SignalR, Roslyn and friends, pulled in by the AI Game
+# Developer package and tracked by its own .nuget-installed.json. They belong to
+# a development tool rather than to the plugin, and a binary committed once sits
+# in the history of every clone from then on. A fresh clone gets them back by
+# opening the project in Unity.
+/[Aa]ssets/Plugins/NuGet/
+/[Aa]ssets/Plugins/NuGet.meta
+/[Aa]ssets/Plugins.meta
+
+# ---------------------------------------------------------------------------
 # Fluffy Bones traces
 # ---------------------------------------------------------------------------
 # Written beside the project by FluffyDebugger. One run per file, named by the
