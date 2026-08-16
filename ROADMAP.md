@@ -23,43 +23,50 @@ and a frame-by-frame debugger that writes CSV.
 **Stored but not enforced.** X Twist. The solver produces pure swing; the field
 is saved, drawn and copied like the other two and restricts nothing.
 
-**Missing entirely.** Tests. A user manual. Everything under "Before selling".
+**Missing entirely.** A user manual. Everything under "Before selling".
 
 ---
 
-## 1. Tests — do this first
+## 1. Tests — done, with two corners left
 
-Zero tests exist. The package has an assembly definition for them and nothing
-inside it.
+Twenty two of them: nineteen in `Tests/Editor`, three in `Tests/Runtime`. Every
+one builds its own rig in code and destroys it afterwards, so nothing depends on
+a scene or an asset and nothing writes to bones that belong to one.
 
-This matters more here than in most projects because every defect found so far
-was invisible in a screenshot and only showed up in numbers: a solver that
-injected energy on uneven frames, damping that meant something different at every
-frame rate, limits copied at build time and never refreshed, a chain that came out
-of the inspector frozen, a dummy bone that did not turn with its own bone. Seven
-in one sitting, each of which a test would have caught the moment it appeared.
+All seven cases from the original list are covered:
 
-Write them in this order, because that is roughly their value:
+1. **Energy does not grow on uneven frames** — `FluffyChainSolverTests`.
+2. **The same seconds at different rates leave the chain in the same place** —
+   `FluffyChainSolverTests` at the solver, `FluffyBodyPlayModeTests` through the
+   accumulator.
+3. **Limits hold** — `FluffyChainLimitsTests`, global and per-bone.
+4. **`ClampRange`** — `FluffyChainLimitsTests`.
+5. **A chain from the inspector is not born frozen** — `FluffyChainInspectorTests`.
+6. **The dummy bone** — `FluffyDummyBoneTests`; a chain of one bone lives in
+   `FluffyChainBuildTests`.
+7. **`CaptureState` agrees with the solver** — `FluffyChainTraceTests`.
 
-1. **Energy does not grow on uneven frames.** Replay a recorded sequence of frame
-   times, then the same times averaged, and assert the chain's worst excursion is
-   within a small factor of each other. This is the one that guards the fixed-step
-   work, which took the longest to find and is the easiest to undo by accident.
-2. **A chain behaves the same at 20, 60 and 240 fps.** Same movement, same
-   duration, compare where the tip ends up.
-3. **Limits hold.** Drive a chain hard against a tight limit and assert no bone
-   ever reads further from its pose than the limit allows.
-4. **`FluffyLimits.ClampRange`** keeps the pose inside every range — a pure
-   function, so a table of inputs and outputs.
-5. **A chain built from the inspector is not frozen.** Grow the serialized list
-   the way the + button does, and assert the new entry resolves to unrestricted.
-6. **The dummy bone turns with its own bone**, and a chain of one bone does not
-   throw.
-7. **`CaptureState` agrees with the solver** — the angles a trace reports are the
-   ones the clamp acted on.
+Writing them found one defect and fixed it: gravity was scaled by the step
+squared while the pull to the pose was scaled by the step, so the simulation rate
+decided how far a chain hung — 1.91 degrees off the pose at 30 steps a second,
+0.95 at 60, 0.48 at 120. Both are accelerations now, and 60 still means what it
+meant.
 
-Runtime tests need a scene with a rig; build it in code the way the playground is
-built, so the tests carry no assets.
+Two corners of the original list were not written the way it described, and the
+difference is worth knowing:
+
+- The uneven-frame test uses a synthetic schedule, a short step and a long one
+  alternating, rather than replaying frame times recorded from a real run. The
+  invariant is covered; a replay of `FluffyDebug` timings would cover it against
+  this machine's own stutter, which is where it was found.
+- The rate test compares 30 against 120 and 60 against 120, not the 20 and 240
+  ends of the slider, and compares the angle off the pose rather than where the
+  tip ended up.
+
+Still untested, in rough order of what would hurt: the interpolation between two
+steps is only checked end to end and nothing asserts the drawn pose sits between
+them; the CSV `FluffyDebugger` writes has no test at all; the inspectors have
+none either. Collision and twist have nothing to test yet.
 
 ## 2. Collision
 
