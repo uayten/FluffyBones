@@ -407,7 +407,24 @@ namespace Fluffy
                     continue;
                 }
 
-                bone.rotation = Quaternion.FromToRotation(restDirection, offset) * restRotation;
+                // Clamped here as well as in the step, because this is the pose anyone
+                // can actually see and the tips it is built from are from a step that has
+                // already happened. The head has moved since — the character walked — and
+                // the direction from where the bone is now to where its tip was then is
+                // nobody's idea of a swing. At a frame rate well above the simulation
+                // rate most frames have no step in them at all, so this is the ordinary
+                // case rather than the exceptional one: in a recorded run of the
+                // playground a bone limited to twelve degrees was drawn at 22, and a
+                // character walking briskly at 300 frames a second draws one at 180,
+                // pointing back the way it came.
+                //
+                // The stored tips are deliberately left alone. They are the simulation's
+                // state, and the whole point of drawing between two steps is that the
+                // drawing never feeds back into it.
+                Vector3 direction = offset.normalized;
+                direction = ApplyAngleLimits(joint, ResolveLimits(joint.BoneIndex), restRotation, direction);
+
+                bone.rotation = Quaternion.FromToRotation(restDirection, direction) * restRotation;
             }
         }
 
