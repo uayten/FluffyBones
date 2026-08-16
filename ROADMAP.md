@@ -29,9 +29,11 @@ is saved, drawn and copied like the other two and restricts nothing.
 
 ## 1. Tests — done, with two corners left
 
-Twenty two of them: nineteen in `Tests/Editor`, three in `Tests/Runtime`. Every
+Thirty two of them: twenty seven in `Tests/Editor`, five in `Tests/Runtime`. Every
 one builds its own rig in code and destroys it afterwards, so nothing depends on
-a scene or an asset and nothing writes to bones that belong to one.
+a scene or an asset and nothing writes to bones that belong to one. The runtime
+assembly carries no editor API at all, since it builds for every platform — which
+keeps those tests on the same public surface a customer has.
 
 All seven cases from the original list are covered:
 
@@ -63,10 +65,19 @@ difference is worth knowing:
   ends of the slider, and compares the angle off the pose rather than where the
   tip ended up.
 
-Still untested, in rough order of what would hurt: the interpolation between two
-steps is only checked end to end and nothing asserts the drawn pose sits between
-them; the CSV `FluffyDebugger` writes has no test at all; the inspectors have
-none either. Collision and twist have nothing to test yet.
+Written since, beyond the seven: the pose drawn between two steps lands on the
+step at the end of it and on the path between them in the middle
+(`FluffyChainInterpolationTests`); the CSV is read back and every row checked
+against its own header, in numbers an invariant parser can take
+(`FluffyDebuggerTraceTests`); the bone slot refuses a bone from another character
+(`FluffyBoneFieldTests`); and a falloff curve with no keys leaves the spring
+alone rather than zeroing it (`FluffyProfileTests`).
+
+What is left untested is what has nothing worth testing yet: most of the
+inspector is IMGUI, and collision and twist have no code. Collision arrives with
+its own list — a tip pushed out of a sphere stays out, a push that a limit
+forbids loses to the limit, and a collider moving faster than the chain does not
+pass through it.
 
 ## 2. Collision
 
