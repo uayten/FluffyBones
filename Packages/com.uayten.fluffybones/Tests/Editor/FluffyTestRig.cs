@@ -44,6 +44,43 @@ namespace Fluffy.Tests.Editor
         }
 
         /// <summary>
+        /// A chain that came through Unity's serializer on a real component, rather than
+        /// one built by a constructor.
+        /// </summary>
+        /// <remarks>
+        /// The only way to reach the settings that have no public setter, and the way a
+        /// user's chain is actually made. The limits have to be written by hand because
+        /// Unity zeroes a new array element, and zeroed limits are a frozen bone — the
+        /// inspector has its own fix-up for that, which is tested elsewhere.
+        /// </remarks>
+        public FluffyChain BuildChainThroughAComponent(bool useDummyBone, out FluffyBones body)
+        {
+            var character = new GameObject("Character");
+            _created.Add(character);
+
+            body = character.AddComponent<FluffyBones>();
+
+            var serialized = new SerializedObject(body);
+            SerializedProperty chains = serialized.FindProperty("_chains");
+            chains.arraySize = 1;
+
+            SerializedProperty entry = chains.GetArrayElementAtIndex(0);
+            SerializedProperty limits = entry.FindPropertyRelative("_globalLimits");
+            limits.FindPropertyRelative(nameof(FluffyLimits.Twist)).vector2Value = FluffyLimits.FreeRange;
+            limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value = FluffyLimits.FreeRange;
+            limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ)).vector2Value = FluffyLimits.FreeRange;
+            entry.FindPropertyRelative("_useDummyBone").boolValue = useDummyBone;
+            entry.FindPropertyRelative("_autoDummyLength").boolValue = true;
+            entry.FindPropertyRelative("_dummyLength").floatValue = FluffyChain.DefaultDummyLength;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            FluffyChain chain = body.Chains[0];
+            chain.StartBone = BuildSkeleton(BoneCount);
+
+            return chain;
+        }
+
+        /// <summary>
         /// A straight run of bones along X, and the first of them.
         /// </summary>
         /// <param name="boneCount">How many bones. One is the case a chain refuses.</param>
