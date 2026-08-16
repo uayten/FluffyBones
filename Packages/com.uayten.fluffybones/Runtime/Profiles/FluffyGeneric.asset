@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc3000459966d574c9895bf38dbcb468, type: 3}
   m_Name: FluffyGeneric
   m_EditorClassIdentifier: 
-  _returnStrength: 8
+  _returnStrength: 60
   _returnStrengthFalloff:
     serializedVersion: 2
     m_Curve:
@@ -37,5 +37,5 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  _drag: 0.4
+  _drag: 1
   _gravity: {x: 0, y: -2, z: 0}
