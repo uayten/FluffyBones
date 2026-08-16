@@ -440,7 +440,7 @@ namespace Fluffy.Editor
         /// are left alone — inheriting the previous strand's setup is what you want from
         /// a + button on a skirt.
         /// </remarks>
-        private static void InitialiseChain(SerializedProperty chain)
+        internal static void InitialiseChain(SerializedProperty chain)
         {
             SerializedProperty limits = chain.FindPropertyRelative("_globalLimits");
             SerializedProperty swingY = limits.FindPropertyRelative(nameof(FluffyLimits.SwingY));

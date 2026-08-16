@@ -70,6 +70,12 @@ namespace Fluffy.Tests.Editor
             return start;
         }
 
+        /// <summary>Hands the rig something it did not make, to be destroyed with the rest.</summary>
+        public void Track(Object created)
+        {
+            _created.Add(created);
+        }
+
         /// <summary>One more bone under <paramref name="parent"/>, for hand-built shapes.</summary>
         public Transform AddBone(Transform parent, string name, Vector3 localPosition)
         {
