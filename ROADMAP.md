@@ -14,7 +14,8 @@ and what changed lives in its `CHANGELOG.md`. This file is about what to do next
 **Working.** Chains collected from the bone hierarchy and solved with Verlet on a
 fixed step, drawn between two solved steps so an uneven frame rate never reaches
 the solver. Authored default pose, shared pose assets, per-bone angle limits with
-scene gizmos, sphere and capsule colliders with a radius per chain, profiles with
+scene gizmos, sphere capsule box and plane colliders with a radius per chain and
+a tab of their own on the character, profiles with
 return strength, falloff, damping and gravity, chain detection by bone name, a
 bone picker that only offers the character's own bones, and a frame-by-frame
 debugger that writes CSV.
