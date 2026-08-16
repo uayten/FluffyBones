@@ -22,17 +22,17 @@ namespace Fluffy
         /// Whether the solver does anything with <see cref="Twist"/>.
         /// </summary>
         /// <remarks>
-        /// It rotates a bone by the shortest arc from where it rests to where it now
-        /// points, and a shortest arc carries no roll, so there is no twist to hold back.
-        /// The field is kept because the data is right and a chain's twist is worth
-        /// storing before it is worth simulating — but the inspector hides it and the
-        /// scene does not draw it, since a control that promises what nothing delivers is
-        /// worse than no control. Turning this on is what unhides both.
+        /// False for a long while, and for a good reason: the solver turns a bone by the
+        /// shortest arc from where it rests to where it now points, and a shortest arc
+        /// carries no roll, so there was no twist for a range to hold back. The field was
+        /// stored and copied but hidden in the inspector and left undrawn in the scene,
+        /// since a control that promises what nothing delivers is worse than no control.
         ///
-        /// Not a const: making it one would have the compiler fold the checks away and
-        /// warn about the code on the other side, which is code meant to come back.
+        /// The roll is simulated now, so both come back. Kept as a flag rather than
+        /// deleted because it is the one switch that turns the whole of twist off again —
+        /// the range, the circle in the scene, and any argument about what it costs.
         /// </remarks>
-        public static readonly bool TwistEnforced = false;
+        public static readonly bool TwistEnforced = true;
 
         [Tooltip("Twist along the bone, around its local X. Drawn as a circle.")]
         public Vector2 Twist;

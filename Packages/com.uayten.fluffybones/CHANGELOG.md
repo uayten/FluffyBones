@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **X Twist** is simulated, so the range that was stored all along now holds
+  something back. The solver turns a bone by the shortest arc from its rest
+  direction, which carries no roll by construction, so a bone whose parent rolled
+  used to follow that roll rigidly on the same frame — the one motion in the chain
+  with no secondary motion at all. The roll is now solved in one dimension on the
+  same terms as the swing: the bone keeps the roll it had in the world while the
+  rig turns underneath it, what it was already doing carries on, damping takes its
+  share, and a spring of the same strength pulls it back to the rig. A bone is
+  measured against its own parent rather than against the character, so the roll
+  travels down a tail instead of arriving everywhere at once. No torque and no
+  gravity: where a bone's mass sits is not something a chain of transforms knows.
+- A switch per bone, in the Setup tab, for the bones a chain should leave to the
+  animation. A chain takes everything between its two ends, which is right nearly
+  always and wrong at the top — the first bone of a skirt usually belongs to the
+  hip animation. Saying so used to mean moving the chain's start bone down one and
+  losing that bone's pose and limits with it. Bones below a switched-off one carry
+  on swinging from wherever it puts them. Stored in the pose beside the per-bone
+  limits, so a shared pose asset turns the same bone off on every strand at once.
+- Collision shapes take a **Rotation** on the bone they ride. A bone points
+  wherever the rig aimed it, and a thigh capsule that leans with the muscle cannot
+  be aimed by choosing between three axes. Everything with a direction goes through
+  it — the capsule's axis, the plane's normal, the box's frame, the gizmo.
+- Collision shapes can ride a chain instead of the body, which is how a cape gets a
+  body of its own that the skirt cannot walk through. Such a shape pushes every
+  chain except the one carrying it: a bone pushed out of a shape it carries pushes
+  the shape back, and the strand shakes itself apart within a few frames. The
+  character pairs each chain with the shapes it faces once at `Rebuild`. Chains are
+  solved in list order, so a shape riding one is where the last step left it when
+  the next is solved against it.
+- The Collision tab keeps the two kinds of shape apart, each with its own Add row
+  whose bone picker offers only the bones that make a shape of that kind. They are
+  the same component and differ only in what they are parented to, so nothing else
+  would stop a blocker being put on a cape bone by mistake.
 - `FluffyBones`: the character-level component. Holds the chains, steps them in
   one ordered pass in `LateUpdate`, and detects teleports so a character moving
   a long way in one frame does not launch its chains.
@@ -43,8 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A pose longer than the chain hands its first entries to the bones that exist;
   the extras show greyed, with a button to drop them and save the file.
 - **Angle Limits**: a minimum and a maximum per bone on each of its own axes. Y
-  and Z open the cone the bone swings inside, X is the twist along it — stored
-  and drawn, but not enforced, since the solver produces no twist to clamp yet.
+  and Z open the cone the bone swings inside, X is the twist along it.
   Separate minimums and maximums make the cone lopsided, which is what lets a
   cape billow far off the back and barely move the other way. Stored in the
   rotation asset beside the pose, so both are shared and copied together.
@@ -137,11 +169,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   share its name with the namespace holding it without breaking fully qualified
   references for consumers.
 
-- The component's inspector is a row of tabs — Setup, Pose, Limits, Behaviour,
-  Advanced — instead of one column of foldouts. Reaching the angle limits used to
-  mean scrolling past a rotation field for every bone in the chain. A tab hides
-  four fifths of the inspector, so a dot on a tab marks one holding something
-  other than its default, and the tab you were last in is remembered.
+- The component's inspector is a row of tabs — Setup, Pose, Limits, Collision,
+  Behaviour, Advanced — instead of one column of foldouts. Reaching the angle
+  limits used to mean scrolling past a rotation field for every bone in the chain.
+  The tab you were last in is remembered. A dot marked the tabs holding something
+  other than their default for a while; it landed on nearly every tab of a
+  character that was set up at all, and a mark on everything marks nothing.
 - Every chain is given a pose as soon as the inspector opens, not only the one in
   the Editing Chain dropdown. A chain without one adopts whatever its bones happen
   to be when it is built, so anything that moves those transforms first silently
@@ -161,11 +194,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   A plugin for secondary motion cannot ask for a locked frame rate, which is what
   the honest version of the earlier advice amounted to.
-- **X Twist** is hidden, field and gizmo both, until the solver has a twist to
-  hold back. It turns a bone by the shortest arc from its rest direction, and a
-  shortest arc carries no roll, so the control promised something nothing
-  delivered. The value is still stored and copied; `FluffyLimits.TwistEnforced`
-  brings both back.
 - The gizmo and trace paths walk the bone hierarchy into one list they keep
   rather than building a new one per shape. With bones, axes and limits all
   drawn, an eight-chain skirt was building two dozen of them a repaint.

@@ -231,7 +231,13 @@ namespace Fluffy
                     Length = length,
                     NormalizedDepth = i / (float)(bones.Count - 1),
                     CurrentTip = tip,
-                    PreviousTip = tip
+                    PreviousTip = tip,
+
+                    // The bones were put into the rest pose above, so this is the frame the
+                    // first step will measure the rig's roll against. Left at identity it
+                    // would read the whole of the character's world rotation as a roll that
+                    // happened in one step.
+                    PreviousRestRotation = bone.rotation
                 });
             }
 
@@ -263,6 +269,13 @@ namespace Fluffy
                 Joint joint = _joints[i];
                 joint.CurrentTip = joint.Transform.position + joint.Transform.rotation * joint.BoneAxis * joint.Length;
                 joint.PreviousTip = joint.CurrentTip;
+
+                // At rest is unrolled, and the frame the next step measures against is the
+                // one the bones are standing in now.
+                joint.CurrentTwist = 0f;
+                joint.PreviousTwist = 0f;
+                joint.PreviousRigRoll = 0f;
+                joint.PreviousRestRotation = joint.Transform.rotation;
             }
         }
 
@@ -385,6 +398,13 @@ namespace Fluffy
                 Joint joint = _joints[i];
                 joint.CurrentTip = toPosition + turn * (joint.CurrentTip - fromPosition);
                 joint.PreviousTip = toPosition + turn * (joint.PreviousTip - fromPosition);
+
+                // The roll is stored against the rest frame, so the roll itself is already
+                // carried: an offset from a frame that moved rigidly is the same offset.
+                // The frame it will be measured against next step is what has to move, or
+                // the whole turn reads as a roll the rig did in one step and the chain
+                // unwinds itself over the following second.
+                joint.PreviousRestRotation = turn * joint.PreviousRestRotation;
             }
         }
 
@@ -442,10 +462,23 @@ namespace Fluffy
                 // The stored tips are deliberately left alone. They are the simulation's
                 // state, and the whole point of drawing between two steps is that the
                 // drawing never feeds back into it.
-                Vector3 direction = offset.normalized;
-                direction = ApplyAngleLimits(joint, ResolveLimits(joint.BoneIndex), restRotation, direction);
+                FluffyLimits limits = ResolveLimits(joint.BoneIndex);
 
-                bone.rotation = Quaternion.FromToRotation(restDirection, direction) * restRotation;
+                Vector3 direction = offset.normalized;
+                direction = ApplyAngleLimits(joint, limits, restRotation, direction);
+
+                // Between the two steps as well, so the roll arrives at the same moment
+                // the swing does. Clamped for the same reason the swing is: the limits are
+                // authoring data and may have been dragged since the step that produced
+                // these two values.
+                float twist = Mathf.Clamp(
+                    Mathf.Lerp(joint.PreviousTwist, joint.CurrentTwist, alpha),
+                    limits.Twist.x,
+                    limits.Twist.y);
+
+                bone.rotation = Quaternion.AngleAxis(twist, direction)
+                                * Quaternion.FromToRotation(restDirection, direction)
+                                * restRotation;
             }
         }
 
@@ -571,8 +604,72 @@ namespace Fluffy
                 joint.PreviousTip = joint.CurrentTip;
                 joint.CurrentTip = nextTip;
 
-                bone.rotation = Quaternion.FromToRotation(restDirection, nextTip - position) * restRotation;
+                float twist = StepTwist(
+                    joint, limits, restRotation, direction, returnStrength, deltaTime, stepRatio, inertiaRetained);
+
+                bone.rotation = Quaternion.AngleAxis(twist, direction)
+                                * Quaternion.FromToRotation(restDirection, nextTip - position)
+                                * restRotation;
             }
+        }
+
+        /// <summary>
+        /// Advances the bone's roll about its own axis by one step, and returns where it
+        /// ended up, in degrees off the rig.
+        /// </summary>
+        /// <remarks>
+        /// The swing comes out of the solver for free: it is where the tip is, and a tip
+        /// that is not written stays where it was while the character walks out from under
+        /// it. The roll gets nothing for free, because the solver turns a bone by the
+        /// shortest arc from its rest direction to its new one, and a shortest arc carries
+        /// no roll by construction. A tail whose parent rolls would follow that roll
+        /// exactly, rigidly, on the same frame — which is the one motion in the chain that
+        /// has no secondary motion at all.
+        ///
+        /// So the roll is simulated in one dimension, on the same terms as the swing: the
+        /// bone keeps the roll it had in the world while the rig turns underneath it, what
+        /// it was already doing carries on, damping eats a share of that each step, and a
+        /// spring of the same strength as the swing's pulls it back to the rig. The step
+        /// enters squared for the same reason it does there — a linear term against a
+        /// squared one leaves the simulation rate deciding how far a tail hangs.
+        ///
+        /// Nothing here is a torque. Gravity is left out on purpose: a bone's roll under
+        /// gravity depends on where its mass is, which a chain of transforms does not know
+        /// and no rig is going to be asked for.
+        /// </remarks>
+        private static float StepTwist(
+            Joint joint,
+            FluffyLimits limits,
+            Quaternion restRotation,
+            Vector3 direction,
+            float returnStrength,
+            float deltaTime,
+            float stepRatio,
+            float inertiaRetained)
+        {
+            // How far the rig rolled this bone since the last step, about the axis the
+            // bone actually points along now.
+            Quaternion frameTurn = restRotation * Quaternion.Inverse(joint.PreviousRestRotation);
+            float rigRoll = TwistAngle(frameTurn, direction);
+
+            // The bone's own share of the motion, plus the rig's share of it, is what it
+            // was doing in the world; a share of that survives the step.
+            float carried = (joint.PreviousRigRoll + joint.CurrentTwist - joint.PreviousTwist)
+                            * (stepRatio * inertiaRetained);
+
+            // Standing still in the world while the frame turns opens the same angle the
+            // other way, which is the whole of the lag.
+            float twist = joint.CurrentTwist + carried - rigRoll;
+
+            twist -= twist * (returnStrength * deltaTime * deltaTime * ReferenceRate);
+            twist = Mathf.Clamp(twist, limits.Twist.x, limits.Twist.y);
+
+            joint.PreviousTwist = joint.CurrentTwist;
+            joint.CurrentTwist = twist;
+            joint.PreviousRigRoll = rigRoll;
+            joint.PreviousRestRotation = restRotation;
+
+            return twist;
         }
 
         /// <summary>
@@ -1481,6 +1578,40 @@ namespace Fluffy
 
             /// <summary>World-space tip position last step — the velocity comes from the difference.</summary>
             public Vector3 PreviousTip;
+
+            /// <summary>
+            /// How far the bone is rolled about its own axis from where the rig holds it,
+            /// in degrees, this step.
+            /// </summary>
+            /// <remarks>
+            /// Kept as an offset from the rest frame rather than as an absolute roll,
+            /// because there is no absolute roll to keep: the frame the angle is measured
+            /// in turns with the animation every step. Zero means the bone is rolled
+            /// exactly as the rig has it.
+            /// </remarks>
+            public float CurrentTwist;
+
+            /// <summary>The same, last step. The roll's speed is the difference.</summary>
+            public float PreviousTwist;
+
+            /// <summary>
+            /// How far the rig rolled this bone last step, in degrees.
+            /// </summary>
+            /// <remarks>
+            /// The swing keeps its speed for free, because it stores tips in world space
+            /// and a world position that is not written stays where it was. A roll stored
+            /// as an offset from a frame that is itself turning has no such luck: the
+            /// rig's share of the motion has to be remembered and carried on, or a bone
+            /// stops dead the instant the animation stops rolling it instead of
+            /// overshooting the way everything else here does.
+            /// </remarks>
+            public float PreviousRigRoll;
+
+            /// <summary>
+            /// The rest frame as it was last step, so how far the rig rolled between the
+            /// two can be measured.
+            /// </summary>
+            public Quaternion PreviousRestRotation;
         }
 
         // TODO: chains defined by an explicit bone list, for rigs that branch.

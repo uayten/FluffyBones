@@ -13,7 +13,9 @@ and what changed lives in its `CHANGELOG.md`. This file is about what to do next
 
 **Working.** Chains collected from the bone hierarchy and solved with Verlet on a
 fixed step, drawn between two solved steps so an uneven frame rate never reaches
-the solver. Authored default pose, shared pose assets, per-bone angle limits with
+the solver, and a roll along each bone solved beside the swing so a tail unwinds
+after the body that turned it. Authored default pose, shared pose assets, per-bone
+angle limits on all three axes with
 scene gizmos, a switch per bone for the ones the animation should keep, sphere
 capsule box and plane colliders that can be turned on the bone they ride and can
 ride a chain as readily as the body, a radius per chain and a tab of their own on
@@ -24,8 +26,7 @@ debugger that writes CSV.
 
 **Stubbed.** Nothing.
 
-**Stored but not enforced.** X Twist. The solver produces pure swing; the field
-is saved, drawn and copied like the other two and restricts nothing.
+**Stored but not enforced.** Nothing. X Twist was the last of it.
 
 **Missing entirely.** A user manual. Everything under "Before selling".
 
@@ -33,7 +34,7 @@ is saved, drawn and copied like the other two and restricts nothing.
 
 ## 1. Tests — done, with two corners left
 
-Fifty eight of them: fifty in `Tests/Editor`, eight in `Tests/Runtime`. Every
+Sixty three of them: fifty five in `Tests/Editor`, eight in `Tests/Runtime`. Every
 one builds its own rig in code and destroys it afterwards, so nothing depends on
 a scene or an asset and nothing writes to bones that belong to one. The runtime
 assembly carries no editor API at all, since it builds for every platform — which
@@ -81,10 +82,14 @@ Collision arrived with its own nine, in `FluffyColliderTests` and one in
 `FluffyBodyPlayModeTests`, and gained four more when shapes learned to turn and to
 ride a chain. The pose seeding that keeps a skirt from adopting a rest pose by
 accident has three in `FluffyPoseSeedingTests`, and the switch that leaves a bone
-to its animation has five in `FluffyChainBoneSwitchTests`.
+to its animation has five in `FluffyChainBoneSwitchTests`. Twist has five of its
+own in `FluffyChainTwistTests`: that a bone is left behind by a rig rolling under
+it, that the roll travels down the chain rather than arriving everywhere at once,
+that it comes home once the rig stops, that the range holds, and that a chain
+which is only swinging never rolls itself.
 
 What is left untested is what has nothing worth testing yet: most of the
-inspector is IMGUI, and twist has no code. One case is known and not written — a
+inspector is IMGUI. One case is known and not written — a
 collider moving faster than the chain can be pushed by it, which needs a shape
 swept between two steps rather than sampled at one, and there is nothing to test
 until that exists.
@@ -134,15 +139,32 @@ What is left:
   case a sensibly built rig does not have — worth revisiting the day a rig has
   one.
 
-## 3. X Twist, for real
+## 3. X Twist — done
 
-The solver rotates a bone by the shortest arc from its rest direction to its new
-one, which by construction carries no roll. Giving the twist meaning needs a roll
-angle and an angular speed per joint, driven by the parent's roll, damped like
-the swing, and clamped to the Twist range.
+A roll angle and its speed per joint, driven by the parent's roll, damped like the
+swing and clamped to the Twist range, which is what this section asked for.
 
-Until it exists the field is hidden, so nothing in the inspector promises what
-the solver does not do. Unhiding is one flag.
+The shape of it: the solver still turns a bone by the shortest arc, which carries
+no roll, so the roll is solved beside it in one dimension. A bone keeps the roll
+it had in the world while its rest frame turns underneath it; what it was already
+doing carries on, damping takes its share each step, and the same spring that
+holds the swing to its pose pulls the roll back to the rig. The step enters
+squared, for the same reason it does in the swing.
+
+A bone's rest frame is its parent's rotation, and the parent has already lagged,
+so each bone is handed the share of the roll the one above it passed on. That is
+what makes a tail unwind along its length rather than in one piece. It falls out
+of where the roll is measured rather than out of anything the code says, which is
+why there is a test pinning it.
+
+No torque and no gravity. A bone's roll under gravity depends on where its mass
+sits, which a chain of transforms does not know and no rig is going to be asked
+for. `FluffyLimits.TwistEnforced` is still the one switch that turns the whole
+thing off — the simulation, the field and the circle in the scene.
+
+What is left: the trace writes the twist angle but has no `AtTwistLimit` beside
+the two swing flags, so a roll pinned against its range does not show in the CSV
+the way a pinned swing does.
 
 ## 4. A user manual
 
