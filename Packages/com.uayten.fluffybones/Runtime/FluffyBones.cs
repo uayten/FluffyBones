@@ -64,8 +64,9 @@ namespace Fluffy
         [Tooltip("How many times a second the chains are solved. The solver takes steps " +
                  "of this length whatever the frame rate, and what is drawn is worked out " +
                  "between the last two — so a chain behaves the same on every machine and " +
-                 "does not care that frames arrive unevenly. Higher is stiffer and costs " +
-                 "more; 60 suits most characters.")]
+                 "does not care that frames arrive unevenly. Higher costs more and buys " +
+                 "accuracy rather than a different look — a chain hangs and swings the " +
+                 "same at every rate; 60 suits most characters.")]
         [Range(20f, 240f)]
         [SerializeField] private float _simulationRate = 60f;
 

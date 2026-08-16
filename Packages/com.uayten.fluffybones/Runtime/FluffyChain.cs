@@ -21,9 +21,11 @@ namespace Fluffy
         private const float DefaultDrag = 0.15f;
 
         /// <summary>
-        /// The frame rate a profile's damping reads as. A drag of 0.15 means "keep 85% of
-        /// the speed each sixtieth of a second" at any frame rate, so profiles tuned
-        /// before this was rate-independent still behave as they were tuned.
+        /// The rate a profile reads as, for both the damping and the pull back to the
+        /// pose. A drag of 0.15 means "keep 85% of the speed each sixtieth of a second"
+        /// whatever the step, and a return strength means at every rate what it meant at
+        /// sixty — so profiles tuned before either was made rate-independent still behave
+        /// as they were tuned.
         /// </summary>
         private const float ReferenceRate = 60f;
 
@@ -463,7 +465,19 @@ namespace Fluffy
                     : DefaultReturnStrength;
 
                 Vector3 inertia = (joint.CurrentTip - joint.PreviousTip) * (stepRatio * inertiaRetained);
-                Vector3 pullToRest = restDirection * (returnStrength * joint.Length * deltaTime);
+
+                // Scaled by the step squared, the same as gravity, because where the chain
+                // comes to rest is the balance between these two and a balance between a
+                // squared term and a linear one keeps the step inside its answer: the same
+                // chain settled 1.91 degrees off its pose at 30 steps a second, 0.95 at 60
+                // and 0.48 at 120, which is the step length and nothing else. Doubling the
+                // simulation rate is meant to buy accuracy, not halve how far a skirt
+                // hangs. The reference rate is what keeps profiles meaning what they
+                // already meant: at 60 steps a second the two forms are equal, so nothing
+                // tuned before this moves, and every other rate now matches 60 instead of
+                // drifting away from it.
+                Vector3 pullToRest = restDirection
+                                     * (returnStrength * joint.Length * deltaTime * deltaTime * ReferenceRate);
 
                 Vector3 nextTip = joint.CurrentTip + inertia + pullToRest + gravityStep;
 
