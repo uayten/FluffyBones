@@ -137,6 +137,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   share its name with the namespace holding it without breaking fully qualified
   references for consumers.
 
+- The component's inspector is a row of tabs — Setup, Pose, Limits, Behaviour,
+  Advanced — instead of one column of foldouts. Reaching the angle limits used to
+  mean scrolling past a rotation field for every bone in the chain. A tab hides
+  four fifths of the inspector, so a dot on a tab marks one holding something
+  other than its default, and the tab you were last in is remembered.
+- Every chain is given a pose as soon as the inspector opens, not only the one in
+  the Editing Chain dropdown. A chain without one adopts whatever its bones happen
+  to be when it is built, so anything that moves those transforms first silently
+  becomes the pose it springs back to.
+
 ### Fixed
 
 - The chains are solved on a fixed step and drawn between two of them, so an
@@ -151,6 +161,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   A plugin for secondary motion cannot ask for a locked frame rate, which is what
   the honest version of the earlier advice amounted to.
+- **X Twist** is hidden, field and gizmo both, until the solver has a twist to
+  hold back. It turns a bone by the shortest arc from its rest direction, and a
+  shortest arc carries no roll, so the control promised something nothing
+  delivered. The value is still stored and copied; `FluffyLimits.TwistEnforced`
+  brings both back.
+- The gizmo and trace paths walk the bone hierarchy into one list they keep
+  rather than building a new one per shape. With bones, axes and limits all
+  drawn, an eight-chain skirt was building two dozen of them a repaint.
 - Damping was applied once per step, so what it meant depended on how many steps a
   second there happened to be. A drag of 0.15 leaves 38% of a bone's speed after
   100 ms at 60 fps, 72% at 20, and 0.9% at 292 — which a small scene in the editor

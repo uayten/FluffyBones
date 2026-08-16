@@ -99,6 +99,7 @@ namespace Fluffy
         [SerializeField] private FluffyBonePose[] _defaultPose;
 
         private readonly List<Joint> _joints = new List<Joint>();
+        private readonly List<Transform> _drawBones = new List<Transform>();
         private bool _isBuilt;
         private float _previousStep;
 
@@ -257,7 +258,7 @@ namespace Fluffy
                 return;
             }
 
-            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            List<Transform> bones = CollectForDrawing();
 
             for (int i = 0; i < bones.Count; i++)
             {
@@ -600,7 +601,7 @@ namespace Fluffy
             }
 
             Color color = Gizmos.color;
-            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            List<Transform> bones = CollectForDrawing();
 
             for (int i = 0; i < bones.Count; i++)
             {
@@ -638,7 +639,7 @@ namespace Fluffy
             }
 
             Color previous = Gizmos.color;
-            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            List<Transform> bones = CollectForDrawing();
 
             for (int i = 0; i < bones.Count; i++)
             {
@@ -667,7 +668,10 @@ namespace Fluffy
                 // arc you are looking at names the field you need to edit.
                 DrawSwingArc(head, restDirection, towardsY, limits.SwingY, size, AxisYColor);
                 DrawSwingArc(head, restDirection, towardsZ, limits.SwingZ, size, AxisZColor);
-                DrawTwistCircle(head, restDirection, towardsY, towardsZ, limits.Twist, size);
+                if (FluffyLimits.TwistEnforced)
+                {
+                    DrawTwistCircle(head, restDirection, towardsY, towardsZ, limits.Twist, size);
+                }
             }
 
             Gizmos.color = previous;
@@ -855,7 +859,7 @@ namespace Fluffy
             }
 
             Color color = Gizmos.color;
-            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            List<Transform> bones = CollectForDrawing();
 
             for (int i = 0; i < bones.Count; i++)
             {
@@ -938,7 +942,7 @@ namespace Fluffy
             }
 
             // Not playing: preview the bones the solver would pick up.
-            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            List<Transform> bones = CollectForDrawing();
             for (int i = 0; i < bones.Count - 1; i++)
             {
                 Gizmos.DrawLine(bones[i].position, bones[i + 1].position);
@@ -1009,6 +1013,21 @@ namespace Fluffy
 
         /// <summary>Whether this chain has an authored default pose.</summary>
         public bool HasDefaultPose => PoseData != null && PoseData.Length > 0;
+
+        /// <summary>
+        /// The chain's bones, into the list this chain keeps for drawing.
+        /// </summary>
+        /// <remarks>
+        /// Only for the gizmo and trace paths, which run every repaint and would
+        /// otherwise allocate a list per shape per chain. Anything that holds on to the
+        /// result past its own call has to take a copy: the next caller refills this one.
+        /// </remarks>
+        private List<Transform> CollectForDrawing()
+        {
+            CollectChain(_startBone, _lastBone, _drawBones);
+
+            return _drawBones;
+        }
 
         /// <summary>What the bone at <paramref name="index"/> is allowed to do.</summary>
         /// <remarks>
@@ -1104,11 +1123,27 @@ namespace Fluffy
         public static List<Transform> CollectChain(Transform start, Transform last = null)
         {
             var bones = new List<Transform>();
+            CollectChain(start, last, bones);
+
+            return bones;
+        }
+
+        /// <summary>
+        /// The same walk, into a list the caller owns.
+        /// </summary>
+        /// <remarks>
+        /// The drawing goes through here with one list it keeps: every shape used to walk
+        /// the hierarchy into a list of its own, and with bones, axes and limits all on, a
+        /// skirt of eight chains threw away some thirty of them per repaint.
+        /// </remarks>
+        public static void CollectChain(Transform start, Transform last, List<Transform> into)
+        {
+            into.Clear();
             Transform current = start;
 
             while (current != null)
             {
-                bones.Add(current);
+                into.Add(current);
 
                 if (last != null && current == last)
                 {
@@ -1117,8 +1152,6 @@ namespace Fluffy
 
                 current = current.childCount > 0 ? current.GetChild(0) : null;
             }
-
-            return bones;
         }
 
         /// <summary>

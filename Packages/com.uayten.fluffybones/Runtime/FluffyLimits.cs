@@ -18,6 +18,22 @@ namespace Fluffy
         /// <summary>A limit of 180° in both directions holds nothing back.</summary>
         public const float Open = 180f;
 
+        /// <summary>
+        /// Whether the solver does anything with <see cref="Twist"/>.
+        /// </summary>
+        /// <remarks>
+        /// It rotates a bone by the shortest arc from where it rests to where it now
+        /// points, and a shortest arc carries no roll, so there is no twist to hold back.
+        /// The field is kept because the data is right and a chain's twist is worth
+        /// storing before it is worth simulating — but the inspector hides it and the
+        /// scene does not draw it, since a control that promises what nothing delivers is
+        /// worse than no control. Turning this on is what unhides both.
+        ///
+        /// Not a const: making it one would have the compiler fold the checks away and
+        /// warn about the code on the other side, which is code meant to come back.
+        /// </remarks>
+        public static readonly bool TwistEnforced = false;
+
         [Tooltip("Twist along the bone, around its local X. Drawn as a circle.")]
         public Vector2 Twist;
 

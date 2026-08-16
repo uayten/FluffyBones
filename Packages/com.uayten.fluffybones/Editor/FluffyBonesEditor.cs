@@ -67,15 +67,24 @@ namespace Fluffy.Editor
         private SerializedProperty _showLimits;
         private SerializedProperty _boneColor;
         private SerializedProperty _limitSize;
+        private SerializedProperty _simulationRate;
+
+        /// <summary>Which face of the component the inspector is showing.</summary>
+        private enum Tab
+        {
+            Setup,
+            Pose,
+            Limits,
+            Behaviour,
+            Advanced
+        }
+
+        private const string TabPreference = "Fluffy.InspectorTab";
 
         private UnityEditor.Editor _profileEditor;
         private SerializedObject _poseSerialized;
-        private bool _chainExpanded = true;
-        private bool _poseExpanded = true;
+        private Tab _tab;
         private bool _rotationsExpanded = true;
-        private bool _behaviourExpanded = true;
-        private bool _limitsExpanded;
-        private bool _showAdvanced;
         private int _editingChain;
 
         private void OnEnable()
@@ -90,6 +99,9 @@ namespace Fluffy.Editor
             _showLimits = serializedObject.FindProperty("_showLimits");
             _boneColor = serializedObject.FindProperty("_boneColor");
             _limitSize = serializedObject.FindProperty("_limitSize");
+            _simulationRate = serializedObject.FindProperty("_simulationRate");
+
+            _tab = (Tab)EditorPrefs.GetInt(TabPreference, 0);
         }
 
         private void OnDisable()
@@ -108,48 +120,238 @@ namespace Fluffy.Editor
         {
             serializedObject.Update();
 
-            DrawMode();
+            SeedAllChains();
 
-            bool isSingle = (FluffyChainMode)_mode.enumValueIndex == FluffyChainMode.Single;
+            DrawTabs();
+            EditorGUILayout.Space();
 
-            if (DrawSection(isSingle ? "Chain" : "Chains", ref _chainExpanded))
+            switch (_tab)
             {
-                if (isSingle)
-                {
-                    DrawSingleChain();
-                }
-                else
-                {
-                    DrawMultipleChains();
-                }
-            }
+                case Tab.Setup:
+                    DrawSetupTab();
+                    break;
 
-            if (DrawSection("Default Pose", ref _poseExpanded))
-            {
-                DrawDefaultPose();
-            }
+                case Tab.Pose:
+                    DrawPoseTab();
+                    break;
 
-            if (DrawSection("Behaviour", ref _behaviourExpanded))
-            {
-                DrawProfile();
-            }
+                case Tab.Limits:
+                    DrawLimitsTab();
+                    break;
 
-            DrawAdvanced();
+                case Tab.Behaviour:
+                    DrawProfile();
+                    break;
+
+                default:
+                    DrawAdvancedTab();
+                    break;
+            }
 
             serializedObject.ApplyModifiedProperties();
         }
 
         /// <summary>
-        /// A section header that folds its contents away. Every part of the component
-        /// gets one, so a character with a dozen posed bones is still navigable.
+        /// The row of tabs, and the mark on the ones holding something worth knowing
+        /// about from another tab.
         /// </summary>
-        private static bool DrawSection(string title, ref bool expanded)
+        /// <remarks>
+        /// Everything used to be drawn in a column, which meant scrolling the whole pose
+        /// of a twenty-bone chain to reach the limits underneath it. A tab hides four
+        /// fifths of the inspector, though, so a setting changed and forgotten is easy to
+        /// lose: the dot says a tab is holding something other than its default.
+        /// </remarks>
+        private void DrawTabs()
         {
-            EditorGUILayout.Space();
-            expanded = EditorGUILayout.Foldout(expanded, title, true, SectionStyle);
+            var labels = new[]
+            {
+                new GUIContent(Marked("Setup", HasChains)),
+                new GUIContent(Marked("Pose", HasPose)),
+                new GUIContent(Marked("Limits", HasLimits)),
+                new GUIContent(Marked("Behaviour", _profile.objectReferenceValue != null)),
+                new GUIContent(Marked("Advanced", _showLimits.boolValue || _showAxes.boolValue))
+            };
 
-            return expanded;
+            int chosen = GUILayout.Toolbar((int)_tab, labels, GUILayout.Height(24f));
+
+            if (chosen == (int)_tab)
+            {
+                return;
+            }
+
+            _tab = (Tab)chosen;
+
+            // Remembered rather than reset, because the tab you were in is almost always
+            // the one you want when you come back to the object.
+            EditorPrefs.SetInt(TabPreference, chosen);
+            GUI.FocusControl(null);
         }
+
+        private static string Marked(string label, bool marked)
+        {
+            return marked ? label + " •" : label;
+        }
+
+        /// <summary>
+        /// Gives every chain a pose, not only the one the dropdown is showing.
+        /// </summary>
+        /// <remarks>
+        /// A chain with no pose of its own takes whatever its bones happen to be when it
+        /// is built, so anything that moves those transforms first quietly becomes the
+        /// pose it springs back to. Seeding them all the moment the inspector is open
+        /// settles it while the bones are still where the rig put them — which is a
+        /// scene wrecked once already, seven strands of a skirt adopting a pose they were
+        /// left in by accident.
+        ///
+        /// Chains reading a shared pose asset are left alone: their pose is a file, and
+        /// writing to it on behalf of one chain would change every chain sharing it.
+        /// </remarks>
+        private void SeedAllChains()
+        {
+            for (int i = 0; i < _chains.arraySize; i++)
+            {
+                SerializedProperty chain = _chains.GetArrayElementAtIndex(i);
+
+                if (chain.FindPropertyRelative("_pose").objectReferenceValue != null)
+                {
+                    continue;
+                }
+
+                var start = chain.FindPropertyRelative("_startBone").objectReferenceValue as Transform;
+                if (start == null)
+                {
+                    continue;
+                }
+
+                var last = chain.FindPropertyRelative("_lastBone").objectReferenceValue as Transform;
+                SeedPose(chain.FindPropertyRelative("_defaultPose"), FluffyChain.CollectChain(start, last));
+            }
+        }
+
+        /// <summary>Whether any chain has a bone in it.</summary>
+        private bool HasChains
+        {
+            get
+            {
+                for (int i = 0; i < _chains.arraySize; i++)
+                {
+                    if (_chains.GetArrayElementAtIndex(i)
+                        .FindPropertyRelative("_startBone").objectReferenceValue != null)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>Whether the chain being edited rests at something other than its import pose.</summary>
+        private bool HasPose => ((FluffyBones)target).HasDefaultPose;
+
+        /// <summary>Whether anything is holding a bone back.</summary>
+        private bool HasLimits
+        {
+            get
+            {
+                for (int i = 0; i < _chains.arraySize; i++)
+                {
+                    SerializedProperty limits = _chains.GetArrayElementAtIndex(i)
+                        .FindPropertyRelative("_globalLimits");
+
+                    if (!FluffyLimits.IsFree(limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value)
+                        || !FluffyLimits.IsFree(limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ)).vector2Value))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        private void DrawSetupTab()
+        {
+            DrawMode();
+            EditorGUILayout.Space();
+
+            if ((FluffyChainMode)_mode.enumValueIndex == FluffyChainMode.Single)
+            {
+                DrawSingleChain();
+            }
+            else
+            {
+                DrawMultipleChains();
+            }
+        }
+
+        private void DrawPoseTab()
+        {
+            var body = (FluffyBones)target;
+
+            EditorGUILayout.PropertyField(_showBones, new GUIContent("Show Bones"));
+            EditorGUILayout.PropertyField(_showAxes, new GUIContent("Show Axes"));
+
+            if (_showBones.boolValue || _showAxes.boolValue)
+            {
+                EditorGUILayout.PropertyField(_boneColor, new GUIContent("Bone Colour"));
+            }
+
+            EditorGUILayout.HelpBox(
+                "The rotations below are the pose the chain springs back to. Edit them here "
+                + "and the scene updates as you type, or rotate the bones in the scene and "
+                + "press Capture to read them back in.",
+                MessageType.None);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Capture from scene"))
+                {
+                    CaptureDefaultPose(body);
+                }
+
+                using (new EditorGUI.DisabledScope(!body.HasDefaultPose))
+                {
+                    if (GUILayout.Button("Apply to scene"))
+                    {
+                        ApplyDefaultPose(body);
+                    }
+                }
+            }
+
+            DrawChainPose(rotations: true, limits: false);
+        }
+
+        private void DrawLimitsTab()
+        {
+            DrawChainPose(rotations: false, limits: true);
+        }
+
+        private void DrawAdvancedTab()
+        {
+            EditorGUILayout.PropertyField(_simulationRate, new GUIContent(
+                "Simulation Rate",
+                "How many times a second the chains are solved. Steps are this long "
+                + "whatever the frame rate, and what is drawn is worked out between the "
+                + "last two, so a chain behaves the same on every machine."));
+
+            EditorGUILayout.PropertyField(_teleportDistance, new GUIContent(
+                "Teleport Distance",
+                "Movement further than this between two frames, in world units, is "
+                + "more than the chains can swing through: they are carried along "
+                + "rigidly for it instead. Around a bone's length is a good value."));
+
+            EditorGUILayout.Space();
+
+            using (new EditorGUI.DisabledScope(!Application.isPlaying))
+            {
+                if (GUILayout.Button("Reset to rest pose"))
+                {
+                    ((FluffyBones)target).ResetToRestPose();
+                }
+            }
+        }
+
 
         private void DrawMode()
         {
@@ -263,53 +465,22 @@ namespace Fluffy.Editor
             chain.FindPropertyRelative("_dummyLength").floatValue = FluffyChain.DefaultDummyLength;
         }
 
-        private void DrawDefaultPose()
-        {
-            var body = (FluffyBones)target;
-
-            EditorGUILayout.PropertyField(_showBones, new GUIContent("Show Bones"));
-
-            EditorGUILayout.PropertyField(_showAxes, new GUIContent("Show Axes"));
-
-            if (_showBones.boolValue || _showAxes.boolValue)
-            {
-                EditorGUILayout.PropertyField(_boneColor, new GUIContent("Bone Colour"));
-            }
-
-            EditorGUILayout.HelpBox(
-                "The rotations below are the pose the chain springs back to. Edit them here "
-                + "and the scene updates as you type, or rotate the bones in the scene and "
-                + "press Capture to read them back in.",
-                MessageType.None);
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("Capture from scene"))
-                {
-                    CaptureDefaultPose(body);
-                }
-
-                using (new EditorGUI.DisabledScope(!body.HasDefaultPose))
-                {
-                    if (GUILayout.Button("Apply to scene"))
-                    {
-                        ApplyDefaultPose(body);
-                    }
-                }
-            }
-
-            DrawBoneRotations();
-        }
-
         /// <summary>
-        /// One euler field per bone of the chain being edited. Typing in them moves the
-        /// bone in the scene straight away, which is the whole point — posing a tail by
-        /// numbers you cannot see is guesswork.
+        /// The chain being edited, and whichever of its two halves the tab asked for:
+        /// one euler field per bone, and how far each may swing.
         /// </summary>
-        private void DrawBoneRotations()
+        /// <remarks>
+        /// Both halves need the same half page of work first — which chain, which bones,
+        /// and whether the pose lives on the component or in a shared asset — so they are
+        /// drawn from one place rather than each resolving it again. Typing in a rotation
+        /// moves the bone in the scene straight away, which is the whole point: posing a
+        /// tail by numbers you cannot see is guesswork.
+        /// </remarks>
+        private void DrawChainPose(bool rotations, bool limits)
         {
             if (_chains.arraySize == 0)
             {
+                EditorGUILayout.HelpBox("No chains yet. Add one under Setup.", MessageType.Info);
                 return;
             }
 
@@ -322,7 +493,8 @@ namespace Fluffy.Editor
 
             if (startBone == null)
             {
-                EditorGUILayout.HelpBox("Assign a start bone to pose this chain.", MessageType.Info);
+                EditorGUILayout.HelpBox(
+                    "This chain has no start bone yet. Assign one under Setup.", MessageType.Info);
                 return;
             }
 
@@ -344,7 +516,7 @@ namespace Fluffy.Editor
 
             SeedPose(pose, bones);
 
-            if (DrawSubSection("Chain Bones Rotation Asset", ref _rotationsExpanded))
+            if (rotations && DrawSubSection("Chain Bones Rotation Asset", ref _rotationsExpanded))
             {
                 using (new EditorGUI.IndentLevelScope())
                 {
@@ -354,7 +526,10 @@ namespace Fluffy.Editor
                 }
             }
 
-            DrawAngleLimits(pose, bones, owner, chain);
+            if (limits)
+            {
+                DrawAngleLimits(pose, bones, owner, chain);
+            }
 
             if (owner != serializedObject)
             {
@@ -422,19 +597,12 @@ namespace Fluffy.Editor
         }
 
         /// <summary>
-        /// How far each bone may swing from the pose. Its own section rather than a
-        /// fourth column, which would leave every row too narrow to read.
+        /// How far each bone may swing from the pose. Its own tab rather than a fourth
+        /// column, which would leave every row too narrow to read.
         /// </summary>
         private void DrawAngleLimits(
             SerializedProperty pose, List<Transform> bones, SerializedObject owner, SerializedProperty chain)
         {
-            EditorGUILayout.Space();
-
-            if (!DrawSubSection("Angle Limits", ref _limitsExpanded))
-            {
-                return;
-            }
-
             EditorGUILayout.PropertyField(_showLimits, new GUIContent("Show Limits"));
 
             if (_showLimits.boolValue)
@@ -532,7 +700,14 @@ namespace Fluffy.Editor
         {
             DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)), "Y Swing", AxisYStyle);
             DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ)), "Z Swing", AxisZStyle);
-            DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.Twist)), "X Twist", AxisXStyle);
+
+            // Hidden while the solver produces no twist to hold back. The value is still
+            // stored, shared and copied, so nothing is lost by not showing a field that
+            // would do nothing.
+            if (FluffyLimits.TwistEnforced)
+            {
+                DrawRange(limits.FindPropertyRelative(nameof(FluffyLimits.Twist)), "X Twist", AxisXStyle);
+            }
         }
 
         private static void CopyLimits(SerializedProperty from, SerializedProperty to)
@@ -942,30 +1117,6 @@ namespace Fluffy.Editor
                 EditorStyles.miniLabel);
         }
 
-        private void DrawAdvanced()
-        {
-            if (!DrawSection("Advanced", ref _showAdvanced))
-            {
-                return;
-            }
-
-            using (new EditorGUI.IndentLevelScope())
-            {
-                EditorGUILayout.PropertyField(_teleportDistance, new GUIContent(
-                    "Teleport Distance",
-                    "Movement further than this between two frames, in world units, is "
-                    + "more than the chains can swing through: they are carried along "
-                    + "rigidly for it instead. Around a bone's length is a good value."));
-
-                using (new EditorGUI.DisabledScope(!Application.isPlaying))
-                {
-                    if (GUILayout.Button("Reset to rest pose"))
-                    {
-                        ((FluffyBones)target).ResetToRestPose();
-                    }
-                }
-            }
-        }
 
         /// <summary>
         /// Whether the asset lives in a package Unity treats as immutable — which is
