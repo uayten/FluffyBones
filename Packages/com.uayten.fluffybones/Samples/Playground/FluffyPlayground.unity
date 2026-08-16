@@ -479,6 +479,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 389173426}
+  - component: {fileID: 389173427}
   m_Layer: 0
   m_Name: hips
   m_TagString: Untagged
@@ -502,6 +503,27 @@ Transform:
   - {fileID: 149304725}
   m_Father: {fileID: 611819798}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &389173427
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 389173425}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4a6d54bce7ac6c4f93d0b81b0c7411a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FluffyBones.Runtime::Fluffy.FluffyCollider
+  _shape: 1
+  _centre: {x: -0.15, y: 0, z: 0}
+  _rotation: {x: 0, y: 0, z: 0}
+  _radius: 0.14
+  _height: 1.45
+  _size: {x: 0.02, y: 0.02, z: 0.02}
+  _direction: 1
+  _draw: 1
+  _colour: {r: 0.36, g: 0.62, b: 1, a: 0.9}
 --- !u!1 &406722930
 GameObject:
   m_ObjectHideFlags: 0
@@ -901,7 +923,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
-    _radius: 0
+    _radius: 1
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -910,36 +932,42 @@ MonoBehaviour:
       SwingZ: {x: -12, y: 12}
     _defaultPose:
     - Rotation: {x: 0, y: 0, z: -67.39695}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 47.113388}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 60.768158}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 64.47492}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -957,10 +985,10 @@ MonoBehaviour:
   - ear
   _teleportDistance: 25
   _simulationRate: 60
-  _showBones: 1
+  _showBones: 0
   _boneColor: {r: 1, g: 0.55, b: 0.8, a: 1}
-  _showAxes: 1
-  _showLimits: 1
+  _showAxes: 0
+  _showLimits: 0
   _limitSize: 0.8
 --- !u!4 &611819798
 Transform:
@@ -1157,24 +1185,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: -21.038513, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -1875,24 +1907,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: -21.038513, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -1912,24 +1948,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: 23.961487, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -1949,24 +1989,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: 68.96149, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -1986,24 +2030,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: 113.96148, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -2023,24 +2071,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: 158.96149, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -2060,24 +2112,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: -156.03853, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -2097,24 +2153,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: -111.03851, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
@@ -2134,24 +2194,28 @@ MonoBehaviour:
       SwingZ: {x: -180, y: 180}
     _defaultPose:
     - Rotation: {x: -18.654205, y: -66.03851, z: -82.98627}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
         SwingY: {x: -180, y: 180}
         SwingZ: {x: -180, y: 180}
     - Rotation: {x: 0, y: 0, z: 0}
+      Skip: 0
       OverrideLimits: 0
       Limits:
         Twist: {x: -180, y: 180}
