@@ -992,9 +992,9 @@ MonoBehaviour:
   _body: {fileID: 611819797}
   _startBone: {fileID: 0}
   _endBone: {fileID: 0}
-  _automatic: 1
-  _fromFrame: 60
-  _toFrame: 300
+  _automatic: 0
+  _fromFrame: 120
+  _toFrame: 420
   _maxFrames: 3600
   _columns: 7
   _folder: FluffyDebug

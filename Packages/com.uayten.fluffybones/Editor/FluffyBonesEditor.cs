@@ -120,7 +120,7 @@ namespace Fluffy.Editor
         {
             serializedObject.Update();
 
-            SeedAllChains();
+            SeedAllChains(_chains);
 
             DrawTabs();
             EditorGUILayout.Space();
@@ -206,11 +206,11 @@ namespace Fluffy.Editor
         /// Chains reading a shared pose asset are left alone: their pose is a file, and
         /// writing to it on behalf of one chain would change every chain sharing it.
         /// </remarks>
-        private void SeedAllChains()
+        internal static void SeedAllChains(SerializedProperty chains)
         {
-            for (int i = 0; i < _chains.arraySize; i++)
+            for (int i = 0; i < chains.arraySize; i++)
             {
-                SerializedProperty chain = _chains.GetArrayElementAtIndex(i);
+                SerializedProperty chain = chains.GetArrayElementAtIndex(i);
 
                 if (chain.FindPropertyRelative("_pose").objectReferenceValue != null)
                 {
