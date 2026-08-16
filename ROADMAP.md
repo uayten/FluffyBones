@@ -30,7 +30,7 @@ is saved, drawn and copied like the other two and restricts nothing.
 
 ## 1. Tests — done, with two corners left
 
-Forty six of them: thirty eight in `Tests/Editor`, eight in `Tests/Runtime`. Every
+Forty nine of them: forty one in `Tests/Editor`, eight in `Tests/Runtime`. Every
 one builds its own rig in code and destroys it afterwards, so nothing depends on
 a scene or an asset and nothing writes to bones that belong to one. The runtime
 assembly carries no editor API at all, since it builds for every platform — which
@@ -86,13 +86,20 @@ until that exists.
 
 ## 2. Collision — done, with two corners left
 
-Sphere and capsule shapes, put on the bones they belong to and travelling with
-the animation. The solver pushes a tip out along the shortest way and puts it
-back on the sphere of its own bone's length; each chain carries a radius, since a
-strand is a rope rather than a line. Shapes are found at `Rebuild`, so one added
-at runtime needs another. When a shape and an angle limit disagree the limit
-wins, and the clamp after the push is what makes the bone slide along its own
-boundary rather than stop where the shape left it.
+Sphere, capsule, box and plane, put on the bones they belong to and travelling
+with the animation — which is what lifts a skirt when the leg lifts. The plane
+has no size: everything on the wrong side of it is brought to the surface, so one
+on the spine is the whole of "the hair never falls forward". The solver pushes a
+tip out along the shortest way and puts it back on the sphere of its own bone's
+length; each chain carries a radius, since a strand is a rope rather than a line.
+Shapes are found at `Rebuild`, so one added at runtime needs another. When a
+shape and an angle limit disagree the limit wins, and the clamp after the push is
+what makes the bone slide along its own boundary rather than stop where the shape
+left it.
+
+The character's inspector has a Collision tab listing every shape it will be
+solved against, since the shapes live on bones and nobody goes looking for a
+component on a thigh.
 
 No rigidbodies and no physics scene, which was the point.
 
@@ -145,8 +152,9 @@ was captured while it was somewhere else.
 
 ## 6. Smaller things worth doing
 
-- **Split `FluffyBonesEditor.cs`.** It is over a thousand lines. The tab work
-  gives the seams: one file per tab, as partial classes.
+- **Finish splitting `FluffyBonesEditor.cs`.** Still over a thousand lines with
+  the collision tab moved out of it. That one showed the seam works: one file per
+  tab, as partial classes. Pose and Limits are the next two and the biggest.
 - **A chain with no start bone** should say so in the inspector rather than
   drawing an empty section.
 - **Undo.** The inspector writes through `SerializedObject` in most places, which
