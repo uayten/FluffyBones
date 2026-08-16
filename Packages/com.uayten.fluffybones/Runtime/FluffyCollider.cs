@@ -17,7 +17,21 @@ namespace Fluffy
         Sphere,
 
         /// <summary>A ball swept along a line. A thigh, an upper arm, a torso.</summary>
-        Capsule
+        Capsule,
+
+        /// <summary>A brick. A chest, a bag, a plinth.</summary>
+        Box,
+
+        /// <summary>
+        /// A half of the world, divided by a surface with no edges.
+        /// </summary>
+        /// <remarks>
+        /// The one shape with no size: everything on the wrong side of it is pushed to
+        /// the right side, however far away. It is the cheapest way to say "the hair
+        /// never comes forward over the shoulders" or "the cape stays off the back" —
+        /// one plane on the spine does what a row of boxes would do worse.
+        /// </remarks>
+        Plane
     }
 
     /// <summary>
@@ -31,20 +45,23 @@ namespace Fluffy
     ///
     /// Put one on the bone it belongs to and it travels with the animation: a capsule on
     /// the thigh bone is a thigh for as long as the character has one, at no cost per
-    /// frame beyond reading the transform.
+    /// frame beyond reading the transform. That is also what makes a skirt lift when the
+    /// leg does, rather than the leg passing through it.
     /// </remarks>
     [AddComponentMenu("Fluffy Bones/Fluffy Collider")]
     public class FluffyCollider : MonoBehaviour
     {
-        private const float MinRadius = 1e-4f;
+        private const float Tiny = 1e-4f;
 
-        [Tooltip("Sphere for a head or a shoulder, capsule for a limb or a torso.")]
+        [Tooltip("Sphere for a head or a shoulder, capsule for a limb, box for a chest " +
+                 "or a bag, plane for a surface nothing may cross.")]
         [SerializeField] private FluffyColliderShape _shape = FluffyColliderShape.Capsule;
 
         [Tooltip("Where the shape sits, relative to the object it is on.")]
         [SerializeField] private Vector3 _centre = Vector3.zero;
 
-        [Tooltip("How thick the shape is, in the object's own units before scaling.")]
+        [Tooltip("How thick the shape is, in the object's own units before scaling. " +
+                 "Sphere and capsule only.")]
         [Min(0f)]
         [SerializeField] private float _radius = 0.1f;
 
@@ -53,7 +70,11 @@ namespace Fluffy
         [Min(0f)]
         [SerializeField] private float _height = 0.4f;
 
-        [Tooltip("Which of the object's own axes the capsule runs along.")]
+        [Tooltip("Width, height and depth of a box, in the object's own units.")]
+        [SerializeField] private Vector3 _size = new Vector3(0.3f, 0.3f, 0.3f);
+
+        [Tooltip("Which of the object's own axes the capsule runs along, or the plane " +
+                 "faces. A plane pushes everything to the side its axis points at.")]
         [SerializeField] private FluffyAxis _direction = FluffyAxis.Y;
 
         [Tooltip("Draw the shape in the scene. Worth turning off once a character has a " +
@@ -63,7 +84,7 @@ namespace Fluffy
         [Tooltip("Colour of the drawn shape.")]
         [SerializeField] private Color _colour = new Color(0.36f, 0.62f, 1f, 0.9f);
 
-        /// <summary>Sphere or capsule.</summary>
+        /// <summary>Sphere, capsule, box or plane.</summary>
         public FluffyColliderShape Shape
         {
             get => _shape;
@@ -77,7 +98,7 @@ namespace Fluffy
             set => _centre = value;
         }
 
-        /// <summary>How thick the shape is, before the object's scale.</summary>
+        /// <summary>How thick a sphere or capsule is, before the object's scale.</summary>
         public float Radius
         {
             get => _radius;
@@ -91,7 +112,14 @@ namespace Fluffy
             set => _height = Mathf.Max(0f, value);
         }
 
-        /// <summary>Which axis a capsule runs along.</summary>
+        /// <summary>Width, height and depth of a box, before the object's scale.</summary>
+        public Vector3 Size
+        {
+            get => _size;
+            set => _size = new Vector3(Mathf.Max(0f, value.x), Mathf.Max(0f, value.y), Mathf.Max(0f, value.z));
+        }
+
+        /// <summary>Which axis a capsule runs along, or a plane faces.</summary>
         public FluffyAxis Direction
         {
             get => _direction;
@@ -107,52 +135,63 @@ namespace Fluffy
         /// slightly too fat keeps the skirt off the leg while slightly too thin lets it
         /// through, which is the failure anyone would report.
         /// </remarks>
-        public float WorldRadius
-        {
-            get
-            {
-                Vector3 scale = transform.lossyScale;
-
-                return _radius * Mathf.Max(
-                    Mathf.Abs(scale.x), Mathf.Max(Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
-            }
-        }
+        public float WorldRadius => _radius * LargestScale;
 
         /// <summary>Where the shape's centre is in the world.</summary>
         public Vector3 WorldCentre => transform.TransformPoint(_centre);
 
+        /// <summary>Which way a plane faces, or a capsule runs, in the world.</summary>
+        public Vector3 WorldAxis
+        {
+            get
+            {
+                Vector3 axis = transform.TransformDirection(AxisVector(_direction));
+
+                return axis.sqrMagnitude > Tiny ? axis.normalized : Vector3.up;
+            }
+        }
+
         /// <summary>
         /// The line a capsule's centre sweeps along, from one cap's centre to the other.
-        /// Both ends are the same point for a sphere, and for a capsule too short to have
-        /// a middle.
+        /// Both ends are the same point for every other shape, and for a capsule too
+        /// short to have a middle.
         /// </summary>
         public void WorldSegment(out Vector3 from, out Vector3 to)
         {
             Vector3 centre = WorldCentre;
+            from = centre;
+            to = centre;
 
-            if (_shape == FluffyColliderShape.Sphere)
+            if (_shape != FluffyColliderShape.Capsule)
             {
-                from = centre;
-                to = centre;
                 return;
             }
 
             float half = Mathf.Max(0f, _height * 0.5f - _radius);
 
-            if (half <= MinRadius)
+            if (half <= Tiny)
             {
-                from = centre;
-                to = centre;
                 return;
             }
 
             // Scaled along the axis it runs on: a capsule on a bone stretched by its
             // animation should stretch with it.
-            Vector3 axis = transform.TransformDirection(AxisVector(_direction));
-            Vector3 reach = axis.normalized * (half * AxisScale(_direction));
+            Vector3 reach = WorldAxis * (half * AxisScale(_direction));
 
             from = centre - reach;
             to = centre + reach;
+        }
+
+        /// <summary>Half the box's width, height and depth, in world units.</summary>
+        public Vector3 WorldHalfSize
+        {
+            get
+            {
+                Vector3 scale = transform.lossyScale;
+
+                return new Vector3(
+                    Mathf.Abs(_size.x * scale.x), Mathf.Abs(_size.y * scale.y), Mathf.Abs(_size.z * scale.z)) * 0.5f;
+            }
         }
 
         /// <summary>
@@ -164,17 +203,37 @@ namespace Fluffy
         /// since a skirt strand is a rope rather than a line.
         /// </param>
         /// <returns>True when the point was moved.</returns>
+        public bool PushOut(ref Vector3 point, float thickness = 0f)
+        {
+            float skin = Mathf.Max(0f, thickness);
+
+            switch (_shape)
+            {
+                case FluffyColliderShape.Box:
+                    return PushOutOfBox(ref point, skin);
+
+                case FluffyColliderShape.Plane:
+                    return PushOffPlane(ref point, skin);
+
+                default:
+                    return PushOffSegment(ref point, skin);
+            }
+        }
+
+        /// <summary>
+        /// A sphere, and a capsule, which is a sphere whose centre is a line.
+        /// </summary>
         /// <remarks>
         /// A point exactly at the centre has no shortest way out, and the direction
         /// picked for it has to be something rather than a NaN. The capsule's axis is the
         /// least surprising answer for a limb: a bone that has ended up inside a thigh
         /// leaves along the leg rather than sideways through it.
         /// </remarks>
-        public bool PushOut(ref Vector3 point, float thickness = 0f)
+        private bool PushOffSegment(ref Vector3 point, float thickness)
         {
-            float radius = WorldRadius + Mathf.Max(0f, thickness);
+            float radius = WorldRadius + thickness;
 
-            if (radius <= MinRadius)
+            if (radius <= Tiny)
             {
                 return false;
             }
@@ -190,20 +249,91 @@ namespace Fluffy
                 return false;
             }
 
-            if (distance <= MinRadius)
-            {
-                Vector3 escape = from == to
-                    ? transform.TransformDirection(AxisVector(_direction))
-                    : (to - from);
-
-                away = escape.sqrMagnitude > MinRadius ? escape.normalized : Vector3.up;
-            }
-            else
-            {
-                away /= distance;
-            }
-
+            away = distance <= Tiny ? WorldAxis : away / distance;
             point = nearest + away * radius;
+
+            return true;
+        }
+
+        /// <summary>
+        /// A brick, worked out in its own frame so that any scale and any rotation are
+        /// the same problem.
+        /// </summary>
+        /// <remarks>
+        /// Two cases and they are not the same. A point outside the box but within the
+        /// chain's own thickness leaves along the line from the nearest point of the
+        /// surface, which rounds the corners the way a rope resting on one would. A point
+        /// inside leaves through the nearest face, because any other choice drags it
+        /// across the middle of the box on its way out — a strand that clips into a chest
+        /// should come out of the front it went in at, not out of the back.
+        /// </remarks>
+        private bool PushOutOfBox(ref Vector3 point, float thickness)
+        {
+            Vector3 half = WorldHalfSize;
+
+            if (half.x <= Tiny && half.y <= Tiny && half.z <= Tiny)
+            {
+                return false;
+            }
+
+            Quaternion rotation = transform.rotation;
+            Vector3 centre = WorldCentre;
+            Vector3 local = Quaternion.Inverse(rotation) * (point - centre);
+
+            var clamped = new Vector3(
+                Mathf.Clamp(local.x, -half.x, half.x),
+                Mathf.Clamp(local.y, -half.y, half.y),
+                Mathf.Clamp(local.z, -half.z, half.z));
+
+            Vector3 away = local - clamped;
+            float distance = away.magnitude;
+
+            if (distance > Tiny)
+            {
+                if (distance >= thickness)
+                {
+                    return false;
+                }
+
+                local = clamped + away / distance * thickness;
+                point = centre + rotation * local;
+
+                return true;
+            }
+
+            // Inside. Whichever face is nearest is the way out.
+            Vector3 depth = half - new Vector3(Mathf.Abs(local.x), Mathf.Abs(local.y), Mathf.Abs(local.z));
+            int axis = depth.x <= depth.y && depth.x <= depth.z ? 0 : depth.y <= depth.z ? 1 : 2;
+
+            float sign = local[axis] < 0f ? -1f : 1f;
+            local[axis] = sign * (half[axis] + thickness);
+            point = centre + rotation * local;
+
+            return true;
+        }
+
+        /// <summary>
+        /// A surface with no edges, pushing everything to the side its axis points at.
+        /// </summary>
+        /// <remarks>
+        /// No size and no extent on purpose. A plane on the spine, facing back, is the
+        /// whole of "the hair never falls forward over the face" — and it keeps meaning
+        /// that when the character turns, because it turns with the bone. A box would
+        /// have to be big enough to cover every place the hair might reach, and would
+        /// still let it through at the edges.
+        /// </remarks>
+        private bool PushOffPlane(ref Vector3 point, float thickness)
+        {
+            Vector3 normal = WorldAxis;
+            float above = Vector3.Dot(point - WorldCentre, normal);
+
+            if (above >= thickness)
+            {
+                return false;
+            }
+
+            point += normal * (thickness - above);
+
             return true;
         }
 
@@ -213,7 +343,7 @@ namespace Fluffy
             Vector3 along = to - from;
             float lengthSquared = along.sqrMagnitude;
 
-            if (lengthSquared <= MinRadius)
+            if (lengthSquared <= Tiny)
             {
                 return from;
             }
@@ -221,6 +351,16 @@ namespace Fluffy
             float t = Mathf.Clamp01(Vector3.Dot(point - from, along) / lengthSquared);
 
             return from + along * t;
+        }
+
+        private float LargestScale
+        {
+            get
+            {
+                Vector3 scale = transform.lossyScale;
+
+                return Mathf.Max(Mathf.Abs(scale.x), Mathf.Max(Mathf.Abs(scale.y), Mathf.Abs(scale.z)));
+            }
         }
 
         private static Vector3 AxisVector(FluffyAxis axis)
@@ -248,6 +388,7 @@ namespace Fluffy
         private void OnValidate()
         {
             _height = Mathf.Max(_height, _radius * 2f);
+            _size = new Vector3(Mathf.Max(0f, _size.x), Mathf.Max(0f, _size.y), Mathf.Max(0f, _size.z));
         }
 
         private void OnDrawGizmos()
@@ -258,6 +399,25 @@ namespace Fluffy
             }
 
             Gizmos.color = _colour;
+
+            switch (_shape)
+            {
+                case FluffyColliderShape.Box:
+                    DrawBox();
+                    break;
+
+                case FluffyColliderShape.Plane:
+                    DrawPlane();
+                    break;
+
+                default:
+                    DrawSegment();
+                    break;
+            }
+        }
+
+        private void DrawSegment()
+        {
             WorldSegment(out Vector3 from, out Vector3 to);
             float radius = WorldRadius;
 
@@ -270,12 +430,12 @@ namespace Fluffy
 
             Gizmos.DrawWireSphere(to, radius);
 
-            // Four rails along the capsule's side, squared up against the axis so the
-            // shape reads as a tube rather than as two loose balls.
+            // Four rails along the capsule's side, so the shape reads as a tube rather
+            // than as two loose balls.
             Vector3 along = (to - from).normalized;
             Vector3 side = Vector3.Cross(along, Vector3.up);
 
-            if (side.sqrMagnitude < MinRadius)
+            if (side.sqrMagnitude < Tiny)
             {
                 side = Vector3.Cross(along, Vector3.forward);
             }
@@ -287,6 +447,49 @@ namespace Fluffy
             Gizmos.DrawLine(from - side, to - side);
             Gizmos.DrawLine(from + other, to + other);
             Gizmos.DrawLine(from - other, to - other);
+        }
+
+        private void DrawBox()
+        {
+            Matrix4x4 previous = Gizmos.matrix;
+
+            Gizmos.matrix = Matrix4x4.TRS(WorldCentre, transform.rotation, Vector3.one);
+            Gizmos.DrawWireCube(Vector3.zero, WorldHalfSize * 2f);
+            Gizmos.matrix = previous;
+        }
+
+        /// <summary>
+        /// A patch of the plane with an arrow off it, since an infinite surface cannot be
+        /// drawn and a patch with no arrow does not say which side is the allowed one.
+        /// </summary>
+        private void DrawPlane()
+        {
+            Vector3 centre = WorldCentre;
+            Vector3 normal = WorldAxis;
+
+            Vector3 side = Vector3.Cross(normal, Vector3.up);
+
+            if (side.sqrMagnitude < Tiny)
+            {
+                side = Vector3.Cross(normal, Vector3.forward);
+            }
+
+            float reach = Mathf.Max(0.25f, LargestScale * 0.5f);
+            side = side.normalized * reach;
+            Vector3 other = Vector3.Cross(normal, side.normalized) * reach;
+
+            Gizmos.DrawLine(centre + side + other, centre + side - other);
+            Gizmos.DrawLine(centre + side - other, centre - side - other);
+            Gizmos.DrawLine(centre - side - other, centre - side + other);
+            Gizmos.DrawLine(centre - side + other, centre + side + other);
+
+            Gizmos.DrawLine(centre + side + other, centre - side - other);
+            Gizmos.DrawLine(centre + side - other, centre - side + other);
+
+            Vector3 tip = centre + normal * reach;
+            Gizmos.DrawLine(centre, tip);
+            Gizmos.DrawLine(tip, tip - normal * (reach * 0.25f) + side.normalized * (reach * 0.15f));
+            Gizmos.DrawLine(tip, tip - normal * (reach * 0.25f) - side.normalized * (reach * 0.15f));
         }
 
         // TODO: an inside-out mode, for a chain that has to stay within a volume.

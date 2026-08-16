@@ -111,6 +111,88 @@ namespace Fluffy.Tests.Editor
         }
 
         /// <summary>
+        /// A box pushes a point out through the face it is nearest to, and rounds its
+        /// corners by the chain's own thickness.
+        /// </summary>
+        /// <remarks>
+        /// Out through the nearest face rather than towards the centre and out: a strand
+        /// that has clipped into a chest should come out of the front it went in at, not
+        /// be dragged through the middle and out of the back.
+        /// </remarks>
+        [Test]
+        public void ABoxPushesOutThroughTheNearestFace()
+        {
+            FluffyCollider box = Box(Vector3.zero, new Vector3(2f, 1f, 4f));
+
+            // Nearest the top face: half a unit up, against one and two out sideways.
+            var inside = new Vector3(0.2f, 0.4f, 0.3f);
+            Assert.That(box.PushOut(ref inside), Is.True);
+            Assert.That(inside.y, Is.EqualTo(0.5f).Within(1e-4f), "It did not leave through the top.");
+            Assert.That(inside.x, Is.EqualTo(0.2f).Within(1e-4f), "It slid sideways on the way out.");
+
+            // Outside, but within a rope's thickness of a corner: rounded, so the
+            // distance to the corner is what matters rather than the distance to a face.
+            var nearCorner = new Vector3(1.05f, 0.55f, 2.05f);
+            Assert.That(box.PushOut(ref nearCorner, thickness: 0.2f), Is.True);
+            Assert.That(Vector3.Distance(nearCorner, new Vector3(1f, 0.5f, 2f)),
+                Is.EqualTo(0.2f).Within(1e-4f), "The corner was not rounded by the thickness.");
+
+            var far = new Vector3(3f, 0f, 0f);
+            Assert.That(box.PushOut(ref far), Is.False, "A point outside the box was moved.");
+        }
+
+        /// <summary>
+        /// A plane pushes everything to the side it faces, however far away, and leaves
+        /// that side alone.
+        /// </summary>
+        /// <remarks>
+        /// This is the shape for "the hair never falls forward over the face": one plane
+        /// on the spine facing back, which keeps meaning that when the character turns,
+        /// because it turns with the bone.
+        /// </remarks>
+        [Test]
+        public void APlanePushesEverythingToTheSideItFaces()
+        {
+            FluffyCollider plane = Plane(Vector3.zero, FluffyAxis.Z);
+
+            var behind = new Vector3(4f, -7f, -0.75f);
+            Assert.That(plane.PushOut(ref behind), Is.True, "A point on the wrong side was left there.");
+            Assert.That(behind.z, Is.EqualTo(0f).Within(1e-4f), "It was not brought to the surface.");
+            Assert.That(behind.x, Is.EqualTo(4f).Within(1e-4f), "It was dragged sideways as well.");
+            Assert.That(behind.y, Is.EqualTo(-7f).Within(1e-4f), "It was dragged sideways as well.");
+
+            var infront = new Vector3(0f, 0f, 0.01f);
+            Assert.That(plane.PushOut(ref infront), Is.False, "A point on the allowed side was moved.");
+
+            // A rope keeps its own thickness off the surface.
+            var touching = new Vector3(0f, 0f, 0.05f);
+            Assert.That(plane.PushOut(ref touching, thickness: 0.2f), Is.True);
+            Assert.That(touching.z, Is.EqualTo(0.2f).Within(1e-4f));
+        }
+
+        /// <summary>
+        /// A plane on a bone faces wherever the bone faces.
+        /// </summary>
+        /// <remarks>
+        /// The reason to prefer it over a big box: it is defined by the bone's own
+        /// rotation, so a character who turns around does not need the shape rebuilt.
+        /// </remarks>
+        [Test]
+        public void APlaneTurnsWithTheBoneItIsOn()
+        {
+            FluffyCollider plane = Plane(Vector3.zero, FluffyAxis.Z);
+            plane.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+
+            // Facing the other way now, so the far side is the forbidden one.
+            var wasAllowed = new Vector3(0f, 0f, 0.75f);
+            Assert.That(plane.PushOut(ref wasAllowed), Is.True);
+            Assert.That(wasAllowed.z, Is.EqualTo(0f).Within(1e-3f));
+
+            var wasForbidden = new Vector3(0f, 0f, -0.75f);
+            Assert.That(plane.PushOut(ref wasForbidden), Is.False);
+        }
+
+        /// <summary>
         /// A chain solved against a sphere in its way ends up outside it, and its bones
         /// keep their length.
         /// </summary>
@@ -312,6 +394,32 @@ namespace Fluffy.Tests.Editor
             collider.Radius = radius;
             collider.Height = height;
             collider.Direction = direction;
+
+            return collider;
+        }
+
+        private FluffyCollider Box(Vector3 at, Vector3 size)
+        {
+            var host = new GameObject("Box");
+            _rig.Track(host);
+            host.transform.position = at;
+
+            FluffyCollider collider = host.AddComponent<FluffyCollider>();
+            collider.Shape = FluffyColliderShape.Box;
+            collider.Size = size;
+
+            return collider;
+        }
+
+        private FluffyCollider Plane(Vector3 at, FluffyAxis facing)
+        {
+            var host = new GameObject("Plane");
+            _rig.Track(host);
+            host.transform.position = at;
+
+            FluffyCollider collider = host.AddComponent<FluffyCollider>();
+            collider.Shape = FluffyColliderShape.Plane;
+            collider.Direction = facing;
 
             return collider;
         }

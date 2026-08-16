@@ -901,6 +901,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1147,6 +1148,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1183,6 +1185,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1195,6 +1198,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1207,6 +1211,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1219,6 +1224,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1231,6 +1237,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1243,6 +1250,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1255,6 +1263,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1857,6 +1866,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -1893,85 +1903,260 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: 23.961487, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   - _startBone: {fileID: 551770422}
     _lastBone: {fileID: 0}
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: 68.96149, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   - _startBone: {fileID: 31034125}
     _lastBone: {fileID: 0}
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: 113.96148, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   - _startBone: {fileID: 963588328}
     _lastBone: {fileID: 0}
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: 158.96149, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   - _startBone: {fileID: 1711469935}
     _lastBone: {fileID: 0}
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: -156.03853, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   - _startBone: {fileID: 486999659}
     _lastBone: {fileID: 0}
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: -111.03851, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   - _startBone: {fileID: 851873007}
     _lastBone: {fileID: 0}
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
+    _radius: 0
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
       Twist: {x: -180, y: 180}
       SwingY: {x: -180, y: 180}
       SwingZ: {x: -180, y: 180}
-    _defaultPose: []
+    _defaultPose:
+    - Rotation: {x: -18.654205, y: -66.03851, z: -82.98627}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
+    - Rotation: {x: 0, y: 0, z: 0}
+      OverrideLimits: 0
+      Limits:
+        Twist: {x: -180, y: 180}
+        SwingY: {x: -180, y: 180}
+        SwingZ: {x: -180, y: 180}
   _detectionKeywords:
   - tail
   - skirt

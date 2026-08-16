@@ -11,7 +11,7 @@ namespace Fluffy.Editor
     /// inline so a chain can be tuned without leaving the character.
     /// </summary>
     [CustomEditor(typeof(FluffyBones))]
-    public class FluffyBonesEditor : UnityEditor.Editor
+    public partial class FluffyBonesEditor : UnityEditor.Editor
     {
         private const string ProfileFolderHint = "Assets";
         private const float BoneLabelWidth = 110f;
@@ -75,6 +75,7 @@ namespace Fluffy.Editor
             Setup,
             Pose,
             Limits,
+            Collision,
             Behaviour,
             Advanced
         }
@@ -114,6 +115,8 @@ namespace Fluffy.Editor
 
             _poseSerialized?.Dispose();
             _poseSerialized = null;
+
+            DisposeColliderEditors();
         }
 
         public override void OnInspectorGUI()
@@ -137,6 +140,10 @@ namespace Fluffy.Editor
 
                 case Tab.Limits:
                     DrawLimitsTab();
+                    break;
+
+                case Tab.Collision:
+                    DrawCollisionTab();
                     break;
 
                 case Tab.Behaviour:
@@ -168,6 +175,7 @@ namespace Fluffy.Editor
                 new GUIContent(Marked("Setup", HasChains)),
                 new GUIContent(Marked("Pose", HasPose)),
                 new GUIContent(Marked("Limits", HasLimits)),
+                new GUIContent(Marked("Collision", HasColliders)),
                 new GUIContent(Marked("Behaviour", _profile.objectReferenceValue != null)),
                 new GUIContent(Marked("Advanced", _showLimits.boolValue || _showAxes.boolValue))
             };
