@@ -204,6 +204,14 @@ namespace Fluffy
                     continue;
                 }
 
+                if (IsSkipped(i))
+                {
+                    // Turned off by hand. It keeps whatever is animating it, and the bones
+                    // below carry on swinging from wherever that puts them — which is the
+                    // point: a skirt whose first bone belongs to the hip animation.
+                    continue;
+                }
+
                 Transform bone = bones[i];
                 Vector3 tip = ResolveTip(bones, i);
                 float length = Vector3.Distance(bone.position, tip);
@@ -767,6 +775,13 @@ namespace Fluffy
 
             for (int i = 0; i < bones.Count; i++)
             {
+                // A bone the solver never touches is held back by nothing, and drawing its
+                // range would promise a limit that is not enforced.
+                if (IsSkipped(i))
+                {
+                    continue;
+                }
+
                 Quaternion restRotation;
                 Vector3 boneAxis;
                 float length;
@@ -1123,6 +1138,37 @@ namespace Fluffy
             set => _pose = value;
         }
 
+        /// <summary>
+        /// Whether a shape rides on this chain's own bones.
+        /// </summary>
+        /// <remarks>
+        /// A cape carries shapes so that the skirt and the hair cannot pass through it,
+        /// and those shapes swing with the cape because they are parented to its bones.
+        /// The one chain they must not push is the cape itself: a bone pushed out of a
+        /// shape it is carrying pushes the shape, which pushes the bone, and the strand
+        /// shakes itself apart in a few frames.
+        ///
+        /// Everything below the start bone counts, which covers a shape on a bone deeper
+        /// down the chain and a shape on a child object hung off one. The chain's last
+        /// bone does not come into it: a shape below where the chain stops still rides on
+        /// bones the chain is moving.
+        /// </remarks>
+        public bool Owns(FluffyCollider collider)
+        {
+            return collider != null && Owns(collider.transform);
+        }
+
+        /// <summary>Whether a transform is one of this chain's bones, or hangs off one.</summary>
+        /// <remarks>
+        /// The same question the shapes are sorted by, asked of a bone that has no shape
+        /// on it yet — which is what the collision tab needs to offer the right bones for
+        /// each of the two kinds.
+        /// </remarks>
+        public bool Owns(Transform candidate)
+        {
+            return candidate != null && _startBone != null && candidate.IsChildOf(_startBone);
+        }
+
         /// <summary>The bones this chain covers, root first, or null without a start bone.</summary>
         public List<Transform> GetBones()
         {
@@ -1169,6 +1215,20 @@ namespace Fluffy
                 : global;
 
             return limits.Clamped;
+        }
+
+        /// <summary>Whether the bone at <paramref name="index"/> is left out of the simulation.</summary>
+        /// <remarks>
+        /// Read out of the same pose the limits come from, so a shared pose asset turns a
+        /// bone off on every strand of a skirt at once, and so does the copy that "copy
+        /// this chain's setup to the others" makes. A pose written for a longer chain
+        /// answers for the bones it covers and no more.
+        /// </remarks>
+        private bool IsSkipped(int index)
+        {
+            FluffyBonePose[] pose = PoseData;
+
+            return pose != null && index < pose.Length && pose[index].Skip;
         }
 
         /// <summary>
@@ -1373,7 +1433,20 @@ namespace Fluffy
         /// <summary>Whether the bone at <paramref name="index"/> ends in an invented tip.</summary>
         private bool HasVirtualTip(List<Transform> bones, int index)
         {
-            return index == bones.Count - 1 && (!_autoDummyLength || bones[index].childCount == 0);
+            return HasVirtualTip(bones, index, _autoDummyLength);
+        }
+
+        /// <summary>
+        /// The same question without a chain to ask it of, so the inspector can say why
+        /// the last bone of a chain with no dummy bone is not being simulated.
+        /// </summary>
+        /// <remarks>
+        /// One rule in one place: a second copy in the editor would go on agreeing with
+        /// this one right up until somebody changed one of them.
+        /// </remarks>
+        public static bool HasVirtualTip(List<Transform> bones, int index, bool autoDummyLength)
+        {
+            return index == bones.Count - 1 && (!autoDummyLength || bones[index].childCount == 0);
         }
 
         /// <summary>What the chain rests at: the shared pose when there is one.</summary>
@@ -1410,8 +1483,6 @@ namespace Fluffy
             public Vector3 PreviousTip;
         }
 
-        // TODO: collision against FluffyCollider.
-        // TODO: angle limits, so a skirt cannot fold through the leg.
         // TODO: chains defined by an explicit bone list, for rigs that branch.
     }
 }

@@ -47,6 +47,27 @@ namespace Fluffy.Editor
         private static GUIStyle SectionStyle =>
             _sectionStyle ??= new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold };
 
+        private static GUIStyle _noteStyle;
+
+        /// <summary>A quiet line of prose that wraps to the width the inspector has.</summary>
+        private static GUIStyle NoteStyle =>
+            _noteStyle ??= new GUIStyle(EditorStyles.miniLabel) { wordWrap = true };
+
+        /// <summary>
+        /// A sentence under a control, as long as it needs to be.
+        /// </summary>
+        /// <remarks>
+        /// Through <c>GUILayout.Label</c> rather than <c>EditorGUILayout.LabelField</c>,
+        /// which gives a label one line of height whatever its style says and cuts the
+        /// rest off at the edge of the inspector. This asks the style how tall the text is
+        /// at the width it actually has, so a narrow inspector gets three lines instead of
+        /// a third of a sentence.
+        /// </remarks>
+        private static void DrawNote(string text)
+        {
+            GUILayout.Label(text, NoteStyle);
+        }
+
         private static GUIStyle AxisStyle(Color color)
         {
             return new GUIStyle(EditorStyles.label)
@@ -159,25 +180,27 @@ namespace Fluffy.Editor
         }
 
         /// <summary>
-        /// The row of tabs, and the mark on the ones holding something worth knowing
-        /// about from another tab.
+        /// The row of tabs.
         /// </summary>
         /// <remarks>
         /// Everything used to be drawn in a column, which meant scrolling the whole pose
-        /// of a twenty-bone chain to reach the limits underneath it. A tab hides four
-        /// fifths of the inspector, though, so a setting changed and forgotten is easy to
-        /// lose: the dot says a tab is holding something other than its default.
+        /// of a twenty-bone chain to reach the limits underneath it.
+        ///
+        /// Each label carried a dot for a while, on the tabs holding something other than
+        /// their default. It was meant to keep a setting from being changed and forgotten
+        /// behind a tab; what it did was put a mark on nearly every tab of a character
+        /// that is set up at all, which marks nothing.
         /// </remarks>
         private void DrawTabs()
         {
             var labels = new[]
             {
-                new GUIContent(Marked("Setup", HasChains)),
-                new GUIContent(Marked("Pose", HasPose)),
-                new GUIContent(Marked("Limits", HasLimits)),
-                new GUIContent(Marked("Collision", HasColliders)),
-                new GUIContent(Marked("Behaviour", _profile.objectReferenceValue != null)),
-                new GUIContent(Marked("Advanced", _showLimits.boolValue || _showAxes.boolValue))
+                new GUIContent("Setup"),
+                new GUIContent("Pose"),
+                new GUIContent("Limits"),
+                new GUIContent("Collision"),
+                new GUIContent("Behaviour"),
+                new GUIContent("Advanced")
             };
 
             int chosen = GUILayout.Toolbar((int)_tab, labels, GUILayout.Height(24f));
@@ -193,11 +216,6 @@ namespace Fluffy.Editor
             // the one you want when you come back to the object.
             EditorPrefs.SetInt(TabPreference, chosen);
             GUI.FocusControl(null);
-        }
-
-        private static string Marked(string label, bool marked)
-        {
-            return marked ? label + " •" : label;
         }
 
         /// <summary>
@@ -236,48 +254,6 @@ namespace Fluffy.Editor
             }
         }
 
-        /// <summary>Whether any chain has a bone in it.</summary>
-        private bool HasChains
-        {
-            get
-            {
-                for (int i = 0; i < _chains.arraySize; i++)
-                {
-                    if (_chains.GetArrayElementAtIndex(i)
-                        .FindPropertyRelative("_startBone").objectReferenceValue != null)
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-        }
-
-        /// <summary>Whether the chain being edited rests at something other than its import pose.</summary>
-        private bool HasPose => ((FluffyBones)target).HasDefaultPose;
-
-        /// <summary>Whether anything is holding a bone back.</summary>
-        private bool HasLimits
-        {
-            get
-            {
-                for (int i = 0; i < _chains.arraySize; i++)
-                {
-                    SerializedProperty limits = _chains.GetArrayElementAtIndex(i)
-                        .FindPropertyRelative("_globalLimits");
-
-                    if (!FluffyLimits.IsFree(limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value)
-                        || !FluffyLimits.IsFree(limits.FindPropertyRelative(nameof(FluffyLimits.SwingZ)).vector2Value))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-        }
-
         private void DrawSetupTab()
         {
             DrawMode();
@@ -291,6 +267,8 @@ namespace Fluffy.Editor
             {
                 DrawMultipleChains();
             }
+
+            DrawChainBones();
         }
 
         private void DrawPoseTab()
@@ -819,7 +797,7 @@ namespace Fluffy.Editor
         /// scene so the fields show real rotations rather than zeros. Entries beyond the
         /// chain are left alone — a pose written for a longer chain stays intact.
         /// </summary>
-        private static void SeedPose(SerializedProperty pose, List<Transform> bones)
+        internal static void SeedPose(SerializedProperty pose, List<Transform> bones)
         {
             if (pose.arraySize >= bones.Count)
             {
@@ -835,6 +813,11 @@ namespace Fluffy.Editor
                 entry.FindPropertyRelative(nameof(FluffyBonePose.Rotation)).vector3Value =
                     NormalizeEuler(bones[i].localRotation.eulerAngles);
                 entry.FindPropertyRelative(nameof(FluffyBonePose.OverrideLimits)).boolValue = false;
+
+                // Growing a serialized array copies the last entry into the new ones, so a
+                // chain whose tip was switched off would hand that off to every bone it
+                // grew by. A bone the pose has never seen is simulated.
+                entry.FindPropertyRelative(nameof(FluffyBonePose.Skip)).boolValue = false;
 
                 SerializedProperty limits = entry.FindPropertyRelative(nameof(FluffyBonePose.Limits));
                 limits.FindPropertyRelative(nameof(FluffyLimits.SwingY)).vector2Value = FluffyLimits.FreeRange;
@@ -1120,9 +1103,7 @@ namespace Fluffy.Editor
                 _profileEditor.OnInspectorGUI();
             }
 
-            EditorGUILayout.LabelField(
-                AssetDatabase.GetAssetPath(_profile.objectReferenceValue),
-                EditorStyles.miniLabel);
+            DrawNote(AssetDatabase.GetAssetPath(_profile.objectReferenceValue));
         }
 
 

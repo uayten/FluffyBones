@@ -94,6 +94,10 @@ namespace Fluffy
         [SerializeField] private float _limitSize = FluffyChain.DefaultLimitSize;
 
         private readonly List<FluffyCollider> _colliders = new List<FluffyCollider>();
+
+        /// <summary>Per chain, the shapes it is pushed out of: all but the ones it carries.</summary>
+        private readonly List<List<FluffyCollider>> _chainColliders = new List<List<FluffyCollider>>();
+
         private Vector3 _lastPosition;
         private Quaternion _lastRotation = Quaternion.identity;
         private float _accumulator;
@@ -220,7 +224,7 @@ namespace Fluffy
             {
                 for (int i = 0; i < _chains.Count; i++)
                 {
-                    _chains[i].Simulate(step, _profile, _colliders);
+                    _chains[i].Simulate(step, _profile, CollidersAgainst(i));
                 }
 
                 _accumulator -= step;
@@ -285,6 +289,55 @@ namespace Fluffy
         {
             _colliders.Clear();
             GetComponentsInChildren(true, _colliders);
+
+            SortCollidersByChain();
+        }
+
+        /// <summary>
+        /// Works out, once, which shapes each chain is solved against.
+        /// </summary>
+        /// <remarks>
+        /// Two kinds of shape live on a character and the difference is only where they
+        /// are parented. One sits on the body — a capsule on a thigh, a plane on the
+        /// spine — and blocks everything. The other rides on a chain the plugin is
+        /// moving, so that a cape has a body the skirt cannot walk through, and blocks
+        /// everything except the chain carrying it.
+        ///
+        /// Paired here rather than tested in the solver because the answer only changes
+        /// when the hierarchy does: a chain against a dozen shapes, every step, for a
+        /// question whose answer was already known at build.
+        /// </remarks>
+        private void SortCollidersByChain()
+        {
+            while (_chainColliders.Count < _chains.Count)
+            {
+                _chainColliders.Add(new List<FluffyCollider>());
+            }
+
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                List<FluffyCollider> against = _chainColliders[i];
+                against.Clear();
+
+                for (int c = 0; c < _colliders.Count; c++)
+                {
+                    if (!_chains[i].Owns(_colliders[c]))
+                    {
+                        against.Add(_colliders[c]);
+                    }
+                }
+            }
+        }
+
+        /// <summary>The shapes chain <paramref name="index"/> is pushed out of.</summary>
+        /// <remarks>
+        /// Falls back to all of them for a chain added since the last build, which is the
+        /// same answer this gave before shapes could ride on a chain, and is corrected by
+        /// the <see cref="Rebuild"/> that chain needs anyway.
+        /// </remarks>
+        private IReadOnlyList<FluffyCollider> CollidersAgainst(int index)
+        {
+            return index < _chainColliders.Count ? _chainColliders[index] : _colliders;
         }
 
         /// <summary>Snaps every chain back to its rest pose and clears the accumulated motion.</summary>

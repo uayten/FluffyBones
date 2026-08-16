@@ -60,6 +60,11 @@ namespace Fluffy
         [Tooltip("Where the shape sits, relative to the object it is on.")]
         [SerializeField] private Vector3 _centre = Vector3.zero;
 
+        [Tooltip("How the shape is turned on the bone, as euler angles. A thigh capsule " +
+                 "leaning with the muscle, a chest box squared to the ribs rather than to " +
+                 "the bone that happens to carry it.")]
+        [SerializeField] private Vector3 _rotation = Vector3.zero;
+
         [Tooltip("How thick the shape is, in the object's own units before scaling. " +
                  "Sphere and capsule only.")]
         [Min(0f)]
@@ -96,6 +101,13 @@ namespace Fluffy
         {
             get => _centre;
             set => _centre = value;
+        }
+
+        /// <summary>How the shape is turned on the object, as euler angles.</summary>
+        public Vector3 Rotation
+        {
+            get => _rotation;
+            set => _rotation = value;
         }
 
         /// <summary>How thick a sphere or capsule is, before the object's scale.</summary>
@@ -140,12 +152,24 @@ namespace Fluffy
         /// <summary>Where the shape's centre is in the world.</summary>
         public Vector3 WorldCentre => transform.TransformPoint(_centre);
 
+        /// <summary>
+        /// How the shape is turned in the world: the bone's own rotation with the shape's
+        /// turned on top of it.
+        /// </summary>
+        /// <remarks>
+        /// Every part of the shape that has a direction goes through here — the capsule's
+        /// axis, the plane's normal, the box's frame — so turning a shape turns all of it
+        /// at once, and the rotation is about the shape's centre rather than the bone's
+        /// origin.
+        /// </remarks>
+        public Quaternion WorldRotation => transform.rotation * Quaternion.Euler(_rotation);
+
         /// <summary>Which way a plane faces, or a capsule runs, in the world.</summary>
         public Vector3 WorldAxis
         {
             get
             {
-                Vector3 axis = transform.TransformDirection(AxisVector(_direction));
+                Vector3 axis = WorldRotation * AxisVector(_direction);
 
                 return axis.sqrMagnitude > Tiny ? axis.normalized : Vector3.up;
             }
@@ -276,7 +300,7 @@ namespace Fluffy
                 return false;
             }
 
-            Quaternion rotation = transform.rotation;
+            Quaternion rotation = WorldRotation;
             Vector3 centre = WorldCentre;
             Vector3 local = Quaternion.Inverse(rotation) * (point - centre);
 
@@ -453,7 +477,7 @@ namespace Fluffy
         {
             Matrix4x4 previous = Gizmos.matrix;
 
-            Gizmos.matrix = Matrix4x4.TRS(WorldCentre, transform.rotation, Vector3.one);
+            Gizmos.matrix = Matrix4x4.TRS(WorldCentre, WorldRotation, Vector3.one);
             Gizmos.DrawWireCube(Vector3.zero, WorldHalfSize * 2f);
             Gizmos.matrix = previous;
         }

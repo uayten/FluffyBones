@@ -27,57 +27,142 @@ namespace Fluffy.Editor
         /// <summary>Draws the bone slot in <paramref name="position"/>.</summary>
         public static void Draw(Rect position, GUIContent label, SerializedProperty property, Transform root)
         {
-            Rect fieldRect = EditorGUI.PrefixLabel(position, label);
             var current = property.objectReferenceValue as Transform;
 
-            HandleDragAndDrop(fieldRect, property, root);
+            bool clicked = DrawSlot(
+                position,
+                label,
+                current,
+                root,
+                canPick: null,
+                dragged => property.objectReferenceValue = dragged,
+                out Rect fieldRect);
 
-            var content = new GUIContent(
-                current != null ? current.name : "None (Bone)",
-                current != null ? EditorGUIUtility.IconContent("Avatar Icon").image : null);
-
-            if (!GUI.Button(fieldRect, content, EditorStyles.objectField))
+            if (!clicked || !HasRoot(root))
             {
                 return;
             }
 
-            if (root == null)
-            {
-                Debug.LogWarning("[Fluffy Bones] No character to pick bones from.");
-                return;
-            }
-
-            ShowDropdown(fieldRect, property, root);
-        }
-
-        private static void ShowDropdown(Rect rect, SerializedProperty property, Transform root)
-        {
             // The dropdown outlives this OnGUI call, and the SerializedProperty does
             // not: resolve it again from the target when the pick comes back.
             UnityEngine.Object target = property.serializedObject.targetObject;
             string path = property.propertyPath;
 
-            // A fresh state each time: a shared one remembers a selection that means
-            // nothing once the dropdown is listing a different character's bones.
-            var dropdown = new BoneDropdown(new AdvancedDropdownState(), root, bone =>
+            ShowDropdown(fieldRect, root, canPick: null, bone =>
             {
                 var serialized = new SerializedObject(target);
                 serialized.FindProperty(path).objectReferenceValue = bone;
                 serialized.ApplyModifiedProperties();
 
-                // The pick lands after the inspector has finished drawing, so ask for
-                // the repaint that shows it.
                 EditorUtility.SetDirty(target);
-                foreach (UnityEditor.Editor editor in ActiveEditorTracker.sharedTracker.activeEditors)
-                {
-                    editor.Repaint();
-                }
+                RepaintInspectors();
             });
-
-            dropdown.Show(rect);
         }
 
-        private static void HandleDragAndDrop(Rect rect, SerializedProperty property, Transform root)
+        /// <summary>Draws the bone slot on the next layout line, reporting the pick to a callback.</summary>
+        public static void Draw(
+            GUIContent label,
+            Transform current,
+            Transform root,
+            Action<Transform> onPicked,
+            Func<Transform, bool> canPick = null)
+        {
+            Draw(EditorGUILayout.GetControlRect(), label, current, root, onPicked, canPick);
+        }
+
+        /// <summary>
+        /// Draws the bone slot for a value no serialized property is behind — the
+        /// collision tab's "which bone does this shape go on" is one, since it is a
+        /// choice the inspector holds until the Add button is pressed rather than a
+        /// field on the character.
+        /// </summary>
+        /// <param name="canPick">
+        /// Which bones the slot will take. The rest are left out of the dropdown and
+        /// refused from a drag, which is how the collision tab keeps a blocker from being
+        /// put on a cape bone by mistake — the two kinds are the same component, and
+        /// where it is parented is the whole difference between them.
+        /// </param>
+        public static void Draw(
+            Rect position,
+            GUIContent label,
+            Transform current,
+            Transform root,
+            Action<Transform> onPicked,
+            Func<Transform, bool> canPick = null)
+        {
+            bool clicked = DrawSlot(position, label, current, root, canPick, onPicked, out Rect fieldRect);
+
+            if (!clicked || !HasRoot(root))
+            {
+                return;
+            }
+
+            ShowDropdown(fieldRect, root, canPick, bone =>
+            {
+                onPicked?.Invoke(bone);
+                RepaintInspectors();
+            });
+        }
+
+        /// <summary>
+        /// The slot itself: the label, the drag target, and the button that opens the
+        /// dropdown. Shared, so a slot backed by a property and one backed by a plain
+        /// field cannot drift into looking like two different controls.
+        /// </summary>
+        /// <returns>Whether the slot was clicked, meaning the dropdown should open.</returns>
+        private static bool DrawSlot(
+            Rect position,
+            GUIContent label,
+            Transform current,
+            Transform root,
+            Func<Transform, bool> canPick,
+            Action<Transform> onDragged,
+            out Rect fieldRect)
+        {
+            fieldRect = EditorGUI.PrefixLabel(position, label);
+
+            HandleDragAndDrop(fieldRect, root, canPick, onDragged);
+
+            var content = new GUIContent(
+                current != null ? current.name : "None (Bone)",
+                current != null ? EditorGUIUtility.IconContent("Avatar Icon").image : null);
+
+            return GUI.Button(fieldRect, content, EditorStyles.objectField);
+        }
+
+        private static bool HasRoot(Transform root)
+        {
+            if (root != null)
+            {
+                return true;
+            }
+
+            Debug.LogWarning("[Fluffy Bones] No character to pick bones from.");
+            return false;
+        }
+
+        private static void ShowDropdown(
+            Rect rect, Transform root, Func<Transform, bool> canPick, Action<Transform> onPicked)
+        {
+            // A fresh state each time: a shared one remembers a selection that means
+            // nothing once the dropdown is listing a different character's bones.
+            new BoneDropdown(new AdvancedDropdownState(), root, canPick, onPicked).Show(rect);
+        }
+
+        /// <summary>
+        /// The pick lands after the inspector has finished drawing, so ask for the
+        /// repaint that shows it.
+        /// </summary>
+        private static void RepaintInspectors()
+        {
+            foreach (UnityEditor.Editor editor in ActiveEditorTracker.sharedTracker.activeEditors)
+            {
+                editor.Repaint();
+            }
+        }
+
+        private static void HandleDragAndDrop(
+            Rect rect, Transform root, Func<Transform, bool> canPick, Action<Transform> onDragged)
         {
             Event current = Event.current;
             if (current.type != EventType.DragUpdated && current.type != EventType.DragPerform)
@@ -90,7 +175,7 @@ namespace Fluffy.Editor
                 return;
             }
 
-            Transform dragged = ResolveBone(DragAndDrop.objectReferences, root);
+            Transform dragged = ResolveBone(DragAndDrop.objectReferences, root, canPick);
             DragAndDrop.visualMode = dragged != null ? DragAndDropVisualMode.Link : DragAndDropVisualMode.Rejected;
 
             if (current.type != EventType.DragPerform || dragged == null)
@@ -99,16 +184,17 @@ namespace Fluffy.Editor
             }
 
             DragAndDrop.AcceptDrag();
-            property.objectReferenceValue = dragged;
+            onDragged?.Invoke(dragged);
             current.Use();
         }
 
         /// <summary>
-        /// The first dragged object that is a bone of this character. Anything from
-        /// another character, or from the project, is refused rather than silently
-        /// producing a chain that reaches across the scene.
+        /// The first dragged object that is a bone of this character, and one the slot
+        /// will take. Anything from another character, or from the project, is refused
+        /// rather than silently producing a chain that reaches across the scene.
         /// </summary>
-        internal static Transform ResolveBone(UnityEngine.Object[] dragged, Transform root)
+        internal static Transform ResolveBone(
+            UnityEngine.Object[] dragged, Transform root, Func<Transform, bool> canPick = null)
         {
             if (dragged == null || root == null)
             {
@@ -124,7 +210,7 @@ namespace Fluffy.Editor
                     _ => null
                 };
 
-                if (candidate != null && candidate.IsChildOf(root))
+                if (candidate != null && candidate.IsChildOf(root) && (canPick == null || canPick(candidate)))
                 {
                     return candidate;
                 }
@@ -143,12 +229,24 @@ namespace Fluffy.Editor
             private const string Indent = "   ";
 
             private readonly Transform _root;
+            private readonly Func<Transform, bool> _canPick;
             private readonly Action<Transform> _onPicked;
 
-            public BoneDropdown(AdvancedDropdownState state, Transform root, Action<Transform> onPicked)
+            /// <remarks>
+            /// A filtered list still walks the whole skeleton and only leaves rows out of
+            /// it, since a bone the slot refuses is perfectly likely to be the parent of
+            /// one it wants. The indentation is of the rig rather than of what survived
+            /// the filter, so a bone sits where it lives.
+            /// </remarks>
+            public BoneDropdown(
+                AdvancedDropdownState state,
+                Transform root,
+                Func<Transform, bool> canPick,
+                Action<Transform> onPicked)
                 : base(state)
             {
                 _root = root;
+                _canPick = canPick;
                 _onPicked = onPicked;
                 minimumSize = new Vector2(260f, 320f);
             }
@@ -166,7 +264,10 @@ namespace Fluffy.Editor
 
             private void AddBone(AdvancedDropdownItem parent, Transform bone, int depth)
             {
-                parent.AddChild(new BoneItem(RepeatIndent(depth) + bone.name, bone));
+                if (_canPick == null || _canPick(bone))
+                {
+                    parent.AddChild(new BoneItem(RepeatIndent(depth) + bone.name, bone));
+                }
 
                 for (int i = 0; i < bone.childCount; i++)
                 {

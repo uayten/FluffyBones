@@ -24,43 +24,110 @@ namespace Fluffy.Editor
         private readonly Dictionary<FluffyCollider, SerializedObject> _colliderEditors =
             new Dictionary<FluffyCollider, SerializedObject>();
 
-        private Transform _addColliderTo;
-        private FluffyColliderShape _addColliderShape = FluffyColliderShape.Capsule;
-
-        /// <summary>Whether the character has any shape to be pushed out of.</summary>
-        private bool HasColliders => ((FluffyBones)target).GetComponentInChildren<FluffyCollider>(true) != null;
+        /// <summary>What each of the two Add rows is holding, until its button is pressed.</summary>
+        private readonly AddShape _addBlocker = new AddShape();
+        private readonly AddShape _addOnChain = new AddShape();
 
         private void DrawCollisionTab()
         {
             var body = (FluffyBones)target;
             FluffyCollider[] colliders = body.GetComponentsInChildren<FluffyCollider>(true);
 
-            DrawColliderList(colliders);
+            DrawColliderGroup(
+                "Blockers",
+                "On the body, holding the chains off it: a capsule on each thigh is where most skirts "
+                + "start, and a plane on the spine is what keeps hair off the face.",
+                colliders,
+                body,
+                ridingOnAChain: false,
+                _addBlocker);
 
             EditorGUILayout.Space();
-            DrawAddCollider(body);
+
+            DrawColliderGroup(
+                "On the chains",
+                "Riding bones the plugin moves, so that a cape has a body the skirt cannot walk "
+                + "through. Each of these pushes every chain except the one carrying it.",
+                colliders,
+                body,
+                ridingOnAChain: true,
+                _addOnChain);
 
             EditorGUILayout.Space();
             DrawChainRadii();
         }
 
-        private void DrawColliderList(FluffyCollider[] colliders)
+        /// <summary>
+        /// One of the two kinds of shape: what it is for, the ones there are, and the row
+        /// that adds another.
+        /// </summary>
+        /// <remarks>
+        /// Split because the difference is invisible otherwise — the two are the same
+        /// component and differ only in what they are parented to, and a shape that ended
+        /// up on a cape bone by accident behaves nothing like the one that was meant.
+        ///
+        /// Each kind adds through its own row, whose bone picker offers only the bones
+        /// that would make a shape of that kind. That is what makes the two headings mean
+        /// something: you cannot answer "which bone" in a way that lands the shape in the
+        /// other group.
+        /// </remarks>
+        private void DrawColliderGroup(
+            string title,
+            string explanation,
+            FluffyCollider[] colliders,
+            FluffyBones body,
+            bool ridingOnAChain,
+            AddShape add)
         {
-            EditorGUILayout.LabelField($"Shapes ({colliders.Length})", EditorStyles.boldLabel);
-
-            if (colliders.Length == 0)
+            int count = 0;
+            for (int i = 0; i < colliders.Length; i++)
             {
-                EditorGUILayout.HelpBox(
-                    "Nothing on this character to be pushed out of. A capsule on each thigh is where "
-                    + "most skirts start; a plane on the spine is what keeps hair off the face.",
-                    MessageType.Info);
-                return;
+                if (RidesOnAChain(colliders[i], body) == ridingOnAChain)
+                {
+                    count++;
+                }
             }
+
+            EditorGUILayout.LabelField($"{title} ({count})", EditorStyles.boldLabel);
+            DrawNote(explanation);
 
             for (int i = 0; i < colliders.Length; i++)
             {
-                DrawCollider(colliders[i]);
+                if (RidesOnAChain(colliders[i], body) == ridingOnAChain)
+                {
+                    DrawCollider(colliders[i]);
+                }
             }
+
+            DrawAddCollider(body, ridingOnAChain, add);
+        }
+
+        /// <summary>
+        /// Whether the shape is carried by one of the character's chains.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the chains themselves, so the tab sorts shapes into the same two piles
+        /// the solver does rather than into a second opinion about where a bone is.
+        /// </remarks>
+        private static bool RidesOnAChain(FluffyCollider collider, FluffyBones body)
+        {
+            return collider != null && RidesOnAChain(collider.transform, body);
+        }
+
+        /// <summary>Whether a bone belongs to one of the character's chains.</summary>
+        private static bool RidesOnAChain(Transform bone, FluffyBones body)
+        {
+            IReadOnlyList<FluffyChain> chains = body.Chains;
+
+            for (int i = 0; i < chains.Count; i++)
+            {
+                if (chains[i].Owns(bone))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -98,6 +165,14 @@ namespace Fluffy.Editor
                 }
 
                 EditorGUILayout.PropertyField(serialized.FindProperty("_centre"), new GUIContent("Centre"));
+
+                // A sphere has no orientation to set, and the file's own rule is that a
+                // control which promises what nothing delivers is worse than no control.
+                if (collider.Shape != FluffyColliderShape.Sphere)
+                {
+                    EditorGUILayout.PropertyField(
+                        serialized.FindProperty("_rotation"), new GUIContent("Rotation"));
+                }
 
                 switch (collider.Shape)
                 {
@@ -137,48 +212,109 @@ namespace Fluffy.Editor
         }
 
         /// <summary>
-        /// Adds a shape to a bone chosen by name.
+        /// Adds a shape of one kind to a bone chosen by name.
         /// </summary>
         /// <remarks>
-        /// Through the same picker the chain fields use, so it offers this character's
-        /// bones and refuses everything else — a collider parented to another character
-        /// would travel with the wrong animation and be almost impossible to notice.
+        /// Through the same picker the chain fields use — the character's own bones,
+        /// searchable, indented to show the hierarchy — so a shape goes on a thigh by
+        /// picking "thigh_L" rather than by hunting the scene for it. Bones from another
+        /// character are refused: one would travel with the wrong animation and be almost
+        /// impossible to notice.
+        ///
+        /// The picker is narrowed to the bones that make this kind of shape, which is the
+        /// only difference between the two rows: a blocker cannot be put on a cape bone,
+        /// and a shape meant to ride the cape cannot end up on the hips.
         /// </remarks>
-        private void DrawAddCollider(FluffyBones body)
+        private void DrawAddCollider(FluffyBones body, bool ridingOnAChain, AddShape add)
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
-                EditorGUILayout.LabelField("Add a shape", EditorStyles.boldLabel);
+                bool anyBone = HasABoneFor(body, ridingOnAChain);
 
-                using (new EditorGUILayout.HorizontalScope())
+                using (new EditorGUI.DisabledScope(!anyBone))
                 {
-                    var picked = EditorGUILayout.ObjectField(
-                        "On bone", _addColliderTo, typeof(Transform), true) as Transform;
-
-                    // The same rule the chain slots enforce: a shape parented to another
-                    // character would travel with the wrong animation, and nobody would
-                    // spot it in a hierarchy.
-                    _addColliderTo = picked == null || picked.IsChildOf(body.transform) ? picked : _addColliderTo;
-
-                    _addColliderShape = (FluffyColliderShape)EditorGUILayout.EnumPopup(
-                        _addColliderShape, GUILayout.Width(ShapeFieldWidth));
-                }
-
-                using (new EditorGUI.DisabledScope(_addColliderTo == null))
-                {
-                    if (GUILayout.Button("Add"))
+                    using (new EditorGUILayout.HorizontalScope())
                     {
-                        AddCollider(body, _addColliderTo, _addColliderShape);
+                        FluffyBoneField.Draw(
+                            new GUIContent("Add on bone", "The bone the shape rides on, so it travels "
+                                                          + "with the animation."),
+                            add.Bone,
+                            body.transform,
+                            bone => add.Bone = bone,
+                            bone => RidesOnAChain(bone, body) == ridingOnAChain);
+
+                        add.Shape = (FluffyColliderShape)EditorGUILayout.EnumPopup(
+                            add.Shape, GUILayout.Width(ShapeFieldWidth));
+                    }
+
+                    using (new EditorGUI.DisabledScope(add.Bone == null))
+                    {
+                        if (GUILayout.Button("Add"))
+                        {
+                            AddCollider(body, add.Bone, add.Shape);
+                            add.Bone = null;
+                        }
                     }
                 }
 
-                if (_addColliderTo == null)
+                if (!anyBone)
                 {
-                    EditorGUILayout.LabelField(
-                        "Pick the bone the shape belongs to — a thigh, the chest, the spine.",
-                        EditorStyles.miniLabel);
+                    DrawNote(ridingOnAChain
+                        ? "No chain with a start bone yet, so there is nothing for a shape to ride on. "
+                          + "Set one up under Setup."
+                        : "Every bone of this character belongs to a chain, so there is nowhere to put "
+                          + "a shape that blocks them.");
+
+                    return;
+                }
+
+                if (add.Bone == null)
+                {
+                    DrawNote(ridingOnAChain
+                        ? "Pick a bone of a chain the plugin moves — capa_01, a strand of the skirt."
+                        : "Pick the bone the shape belongs to — a thigh, the chest, the spine.");
                 }
             }
+        }
+
+        /// <summary>Whether the character has any bone this kind of shape could go on.</summary>
+        /// <remarks>
+        /// Answered without walking the skeleton, since this runs on every repaint. A
+        /// chain needs a start bone before anything can ride it; a blocker needs one bone
+        /// outside every chain, and the character's own transform is that bone unless a
+        /// chain starts at the character itself.
+        /// </remarks>
+        private static bool HasABoneFor(FluffyBones body, bool ridingOnAChain)
+        {
+            IReadOnlyList<FluffyChain> chains = body.Chains;
+
+            if (!ridingOnAChain)
+            {
+                return !RidesOnAChain(body.transform, body);
+            }
+
+            for (int i = 0; i < chains.Count; i++)
+            {
+                if (chains[i].StartBone != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The bone and shape an Add row is holding.
+        /// </summary>
+        /// <remarks>
+        /// One of these per row rather than a pair of fields each, so adding a third kind
+        /// some day is a third instance and not a third pair of names to keep straight.
+        /// </remarks>
+        private sealed class AddShape
+        {
+            public Transform Bone;
+            public FluffyColliderShape Shape = FluffyColliderShape.Capsule;
         }
 
         /// <summary>
@@ -208,10 +344,8 @@ namespace Fluffy.Editor
                     new GUIContent(start != null ? start.name : $"Chain {i}"));
             }
 
-            EditorGUILayout.LabelField(
-                "A strand is a rope rather than a line. Without a thickness it sinks into a leg up "
-                + "to its middle before anything stops it.",
-                EditorStyles.miniLabel);
+            DrawNote("A strand is a rope rather than a line. Without a thickness it sinks into a leg up "
+                     + "to its middle before anything stops it.");
         }
 
         private void AddCollider(FluffyBones body, Transform bone, FluffyColliderShape shape)
@@ -227,7 +361,6 @@ namespace Fluffy.Editor
             added.Size = Vector3.one * reach;
 
             body.CollectColliders();
-            _addColliderTo = null;
 
             EditorGUIUtility.PingObject(added);
         }

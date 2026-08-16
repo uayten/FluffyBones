@@ -14,8 +14,10 @@ and what changed lives in its `CHANGELOG.md`. This file is about what to do next
 **Working.** Chains collected from the bone hierarchy and solved with Verlet on a
 fixed step, drawn between two solved steps so an uneven frame rate never reaches
 the solver. Authored default pose, shared pose assets, per-bone angle limits with
-scene gizmos, sphere capsule box and plane colliders with a radius per chain and
-a tab of their own on the character, profiles with
+scene gizmos, a switch per bone for the ones the animation should keep, sphere
+capsule box and plane colliders that can be turned on the bone they ride and can
+ride a chain as readily as the body, a radius per chain and a tab of their own on
+the character, profiles with
 return strength, falloff, damping and gravity, chain detection by bone name, a
 bone picker that only offers the character's own bones, and a frame-by-frame
 debugger that writes CSV.
@@ -31,7 +33,7 @@ is saved, drawn and copied like the other two and restricts nothing.
 
 ## 1. Tests — done, with two corners left
 
-Forty nine of them: forty one in `Tests/Editor`, eight in `Tests/Runtime`. Every
+Fifty eight of them: fifty in `Tests/Editor`, eight in `Tests/Runtime`. Every
 one builds its own rig in code and destroys it afterwards, so nothing depends on
 a scene or an asset and nothing writes to bones that belong to one. The runtime
 assembly carries no editor API at all, since it builds for every platform — which
@@ -76,8 +78,10 @@ against its own header, in numbers an invariant parser can take
 alone rather than zeroing it (`FluffyProfileTests`).
 
 Collision arrived with its own nine, in `FluffyColliderTests` and one in
-`FluffyBodyPlayModeTests`. The pose seeding that keeps a skirt from adopting a
-rest pose by accident has three in `FluffyPoseSeedingTests`.
+`FluffyBodyPlayModeTests`, and gained four more when shapes learned to turn and to
+ride a chain. The pose seeding that keeps a skirt from adopting a rest pose by
+accident has three in `FluffyPoseSeedingTests`, and the switch that leaves a bone
+to its animation has five in `FluffyChainBoneSwitchTests`.
 
 What is left untested is what has nothing worth testing yet: most of the
 inspector is IMGUI, and twist has no code. One case is known and not written — a
@@ -98,9 +102,25 @@ shape and an angle limit disagree the limit wins, and the clamp after the push i
 what makes the bone slide along its own boundary rather than stop where the shape
 left it.
 
+A shape is turned as well as placed, since a bone points wherever the rig aimed it
+and a thigh capsule that has to lean with the muscle cannot be aimed by choosing
+between three axes.
+
+Shapes come in two kinds, and the only difference is what they are parented to.
+One sits on the body and blocks everything: a thigh, the chest, a plane on the
+spine. The other rides a chain the plugin is moving, so a cape has a body the
+skirt cannot walk through — it blocks every chain but the one carrying it, which
+the character works out once at `Rebuild` rather than the solver asking every
+step. Without that exception a bone would push a shape it is carrying, which
+pushes the bone, and the strand shakes itself apart in a few frames.
+
+Chains are solved in list order, so a shape riding chain two is where the last
+step left it when chain one is solved against it. A step of lag between two
+chains of the same character is not worth a second pass over both.
+
 The character's inspector has a Collision tab listing every shape it will be
-solved against, since the shapes live on bones and nobody goes looking for a
-component on a thigh.
+solved against, in those two groups, since the shapes live on bones and nobody
+goes looking for a component on a thigh.
 
 No rigidbodies and no physics scene, which was the point.
 

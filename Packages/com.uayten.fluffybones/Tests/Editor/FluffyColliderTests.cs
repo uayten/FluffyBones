@@ -370,6 +370,112 @@ namespace Fluffy.Tests.Editor
             return widest;
         }
 
+        /// <summary>
+        /// Turning a capsule turns what it catches: the same point is inside it before
+        /// the rotation and clear of it after.
+        /// </summary>
+        /// <remarks>
+        /// A shape inherits the bone's rotation, and a bone points wherever the rig
+        /// happened to aim it — a thigh capsule that has to lean with the muscle cannot be
+        /// aimed by choosing between three axes. The sign is not asserted: a capsule is
+        /// the same shape end for end.
+        /// </remarks>
+        [Test]
+        public void RotatingACapsuleTurnsWhatItCatches()
+        {
+            FluffyCollider capsule = Capsule(Vector3.zero, radius: 0.1f, height: 2f, FluffyAxis.Y);
+
+            var beside = new Vector3(0.05f, 0.8f, 0f);
+            Assert.That(capsule.PushOut(ref beside), Is.True,
+                "A point alongside an upright capsule was left where it was.");
+
+            capsule.Rotation = new Vector3(0f, 0f, -90f);
+
+            Assert.That(Mathf.Abs(Vector3.Dot(capsule.WorldAxis, Vector3.right)), Is.EqualTo(1f).Within(1e-3f),
+                "A quarter turn about Z did not lay the capsule along X.");
+
+            var same = new Vector3(0.05f, 0.8f, 0f);
+            Assert.That(capsule.PushOut(ref same), Is.False,
+                "The capsule caught a point that its rotation had moved it away from.");
+        }
+
+        /// <summary>
+        /// Turning a plane turns the side that is allowed, which is the whole of what a
+        /// plane is.
+        /// </summary>
+        [Test]
+        public void RotatingAPlaneTurnsTheSideThatIsAllowed()
+        {
+            FluffyCollider plane = Plane(Vector3.zero, FluffyAxis.Y);
+            plane.Rotation = new Vector3(0f, 0f, -90f);
+
+            Assert.That(plane.WorldAxis, Is.EqualTo(Vector3.right).Using(DirectionComparer),
+                "A quarter turn about Z did not point the plane along positive X.");
+
+            var behind = new Vector3(-1f, -1f, 0f);
+            Assert.That(plane.PushOut(ref behind), Is.True, "A point on the wrong side was left there.");
+            Assert.That(behind.x, Is.EqualTo(0f).Within(1e-4f), "The point came to rest off the surface.");
+            Assert.That(behind.y, Is.EqualTo(-1f).Within(1e-4f),
+                "The point was moved along the surface as well as off it.");
+
+            var infront = new Vector3(1f, -1f, 0f);
+            Assert.That(plane.PushOut(ref infront), Is.False,
+                "A point below the plane but on its allowed side was pushed anyway.");
+        }
+
+        /// <summary>
+        /// A box turns too, which a point resting near one of its corners can tell.
+        /// </summary>
+        /// <remarks>
+        /// The box takes a different way through the collider than the capsule and the
+        /// plane do — those ask for an axis, this one works in the shape's whole frame —
+        /// so the rotation has to arrive by both routes.
+        /// </remarks>
+        [Test]
+        public void RotatingABoxTurnsItsCorners()
+        {
+            FluffyCollider box = Box(Vector3.zero, Vector3.one);
+
+            var beyondTheFace = new Vector3(0.7f, 0f, 0f);
+            Assert.That(box.PushOut(ref beyondTheFace), Is.False,
+                "A point past the face of a half-unit box was moved.");
+
+            box.Rotation = new Vector3(0f, 45f, 0f);
+
+            var same = new Vector3(0.7f, 0f, 0f);
+            Assert.That(box.PushOut(ref same), Is.True,
+                "Turning the box by forty five degrees did not bring its corner out to the point.");
+        }
+
+        /// <summary>
+        /// A chain owns the shapes riding on its own bones, and nothing else's.
+        /// </summary>
+        /// <remarks>
+        /// This is what lets a cape carry shapes at all. A bone pushed out of a shape it
+        /// is carrying pushes the shape, which pushes the bone, and the strand shakes
+        /// itself apart within a few frames; the character hands each chain every shape
+        /// but its own, and this is the rule it sorts them by.
+        /// </remarks>
+        [Test]
+        public void AChainOwnsTheShapesRidingOnItsOwnBones()
+        {
+            FluffyChain chain = _rig.BuildChain();
+            List<Transform> bones = chain.GetBones();
+
+            FluffyCollider hungOffABone = Sphere(Vector3.zero, radius: 0.1f);
+            hungOffABone.transform.SetParent(bones[2], false);
+
+            FluffyCollider onTheStartBone = bones[0].gameObject.AddComponent<FluffyCollider>();
+            FluffyCollider onTheBody = Sphere(Vector3.zero, radius: 0.1f);
+
+            Assert.That(chain.Owns(hungOffABone), Is.True,
+                "A shape parented under a bone of the chain was not recognised as the chain's own.");
+            Assert.That(chain.Owns(onTheStartBone), Is.True,
+                "A shape on the chain's own start bone was not recognised as the chain's own.");
+            Assert.That(chain.Owns(onTheBody), Is.False,
+                "A shape off the chain was taken for one of its own, and would stop pushing it.");
+        }
+
         private FluffyCollider Sphere(Vector3 at, float radius)
         {
             var host = new GameObject("Sphere");
