@@ -57,6 +57,7 @@ for a variant, edit it and every chain using it updates at once.
 | Strength Falloff Along Chain | Scales that strength from start (0) to end (1). Lower at the end whips more. |
 | Damping | Motion bled off every sixtieth of a second. 0 swings forever, 1 kills it instantly. This is what stops wobble. Counted in time, not in frames, so a chain settles the same at 30 fps and at 300. |
 | Gravity | Constant world acceleration. A light droop reads better than -9.81. |
+| Simulation Rate | How many times a second the chains are solved. Steps are this long whatever the frame rate, and what is drawn is worked out between the last two — so a chain behaves the same on every machine and does not care that frames arrive unevenly. Higher is stiffer and costs more; 60 suits most characters. |
 | Teleport Distance | How far the character may move between two frames before the chains are carried along rigidly instead of swinging, in world units. Past this there is no sensible swing to compute, so they travel with the character keeping their shape. Around a bone's length suits most rigs. |
 
 The two spring values are easy to mix up. **Strength** decides *where* the chain
@@ -307,12 +308,13 @@ All types live in the `Fluffy` namespace.
 
 ## Known limitations
 
-- The solver steps at about a sixtieth of a second, splitting a longer frame into
-  as many as sixteen steps. Damping and the spring are both scaled to the step, so
-  a chain behaves the same across frame rates; what is left is that a stall longer
-  than a quarter of a second is stepped in slightly larger pieces rather than
-  costing without bound, and the spring is integrated straight rather than
-  exactly, so the very bottom of the frame rate range still drifts a little.
+- A frame that falls more than eight steps behind gives up the rest of the time
+  it owes rather than trying to catch up, so a machine that stutters badly enough
+  will see the chains fall behind for a moment instead of stalling further.
+- Drawn poses are interpolated between two solved steps along a straight line, so
+  a bone held hard against a limit can be drawn a fraction of a degree outside it
+  — half a degree at a limit of twelve, in a chain moving as fast as it ever
+  does.
 - **X Twist** does not restrict anything yet. The solver swings the bone towards
   its tip and never rolls it, so there is no twist to clamp; the limit is stored,
   drawn and copied like the other two, ready for when there is.

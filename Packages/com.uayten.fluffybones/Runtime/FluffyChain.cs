@@ -364,6 +364,50 @@ namespace Fluffy
             }
         }
 
+        /// <summary>
+        /// Writes the bones from the running state, <paramref name="alpha"/> of the way
+        /// from the step before last to the last.
+        /// </summary>
+        /// <remarks>
+        /// The solver takes steps of a fixed length while frames arrive at whatever
+        /// length they please, so a frame almost never lands on a step boundary. Drawing
+        /// the last completed step on every frame makes the chain move in lurches of one
+        /// step; drawing between the last two puts it where it was at the moment being
+        /// rendered. It costs a step of lag, which for something that is already lagging
+        /// behind a character on purpose is not a cost at all.
+        ///
+        /// Root first, because a bone's head is its parent's tip: a parent written after
+        /// its child would leave the child hanging off a stale position.
+        /// </remarks>
+        public void ApplyPose(float alpha)
+        {
+            if (!_isBuilt)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _joints.Count; i++)
+            {
+                Joint joint = _joints[i];
+                Transform bone = joint.Transform;
+
+                Vector3 position = bone.position;
+                Quaternion parentRotation = bone.parent != null ? bone.parent.rotation : Quaternion.identity;
+                Quaternion restRotation = parentRotation * joint.RestLocalRotation;
+                Vector3 restDirection = restRotation * joint.BoneAxis;
+
+                Vector3 tip = Vector3.Lerp(joint.PreviousTip, joint.CurrentTip, alpha);
+                Vector3 offset = tip - position;
+
+                if (offset.sqrMagnitude < MinBoneLength)
+                {
+                    continue;
+                }
+
+                bone.rotation = Quaternion.FromToRotation(restDirection, offset) * restRotation;
+            }
+        }
+
         /// <summary>Advances the chain by one step.</summary>
         /// <param name="deltaTime">Seconds since the last step.</param>
         /// <param name="fallbackProfile">Used when the chain has no override of its own.</param>

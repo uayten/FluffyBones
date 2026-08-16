@@ -139,6 +139,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The chains are solved on a fixed step and drawn between two of them, so an
+  uneven frame rate no longer reaches the solver at all. Every correction before
+  this one — splitting long frames, scaling damping by time, scaling the stored
+  motion by the ratio between steps — was chasing the same cause one symptom at a
+  time, and none of them could finish the job while the step itself still varied.
+  Measured on a skirt against a recording's own frame times: 16 direction
+  reversals a second and a worst drawn step of 16.5 degrees became 1.9 and 2.4,
+  against 0.7 and 1.0 for a perfectly even frame rate. **Simulation Rate** sets
+  the step, 60 a second by default.
+
+  A plugin for secondary motion cannot ask for a locked frame rate, which is what
+  the honest version of the earlier advice amounted to.
 - Damping was applied once per step, so what it meant depended on how many steps a
   second there happened to be. A drag of 0.15 leaves 38% of a bone's speed after
   100 ms at 60 fps, 72% at 20, and 0.9% at 292 — which a small scene in the editor

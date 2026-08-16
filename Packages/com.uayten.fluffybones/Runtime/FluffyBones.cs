@@ -29,18 +29,11 @@ namespace Fluffy
     public class FluffyBones : MonoBehaviour
     {
         /// <summary>
-        /// How long a solver step aims to be. A frame longer than this is split into
-        /// several, so how hard the chain is pulled in one step does not depend on how
-        /// long the frame happened to take.
+        /// The most steps one frame may run. A frame that has fallen further behind than
+        /// this gives up the rest rather than trying to catch up, which is what stops a
+        /// slow machine from spiralling: every step it adds makes the next frame longer.
         /// </summary>
-        private const float TargetStep = 1f / 60f;
-
-        /// <summary>
-        /// The most steps one frame is split into. A frame long enough to want more is
-        /// stepped in slightly larger pieces rather than costing without bound; at
-        /// Unity's own limit of a third of a second, that is about 20 ms a step.
-        /// </summary>
-        private const int MaxSubsteps = 16;
+        private const int MaxStepsPerFrame = 8;
 
 
         [Tooltip("Single: one chain, like a tail. Multiple: many chains sharing one " +
@@ -68,6 +61,14 @@ namespace Fluffy
         [Min(0f)]
         [SerializeField] private float _teleportDistance = 1f;
 
+        [Tooltip("How many times a second the chains are solved. The solver takes steps " +
+                 "of this length whatever the frame rate, and what is drawn is worked out " +
+                 "between the last two — so a chain behaves the same on every machine and " +
+                 "does not care that frames arrive unevenly. Higher is stiffer and costs " +
+                 "more; 60 suits most characters.")]
+        [Range(20f, 240f)]
+        [SerializeField] private float _simulationRate = 60f;
+
         [Tooltip("Draw the chains' bones in the scene view, so they can be seen and " +
                  "posed without a separate bone renderer.")]
         [SerializeField] private bool _showBones = true;
@@ -93,6 +94,8 @@ namespace Fluffy
 
         private Vector3 _lastPosition;
         private Quaternion _lastRotation = Quaternion.identity;
+        private float _accumulator;
+        private bool _stepped;
 
 #if UNITY_EDITOR
         /// <summary>
@@ -186,23 +189,60 @@ namespace Fluffy
             _lastRotation = rotation;
             CarriedLastFrame = jumped;
 
-            // Split the frame instead of handing the solver whatever it was. The spring
-            // step is proportional to the time given, so a stalled frame — Unity hands
-            // out a third of a second — moved a tip further than the bone is long in one
-            // go: the chain was flung and spent the next frames coming back, which is the
-            // pop that used to be blamed on the teleport check. Splitting also settles the
-            // damping, which is applied once per step and so used to depend on frame rate.
-            int steps = Mathf.Clamp(Mathf.CeilToInt(deltaTime / TargetStep), 1, MaxSubsteps);
-            float step = deltaTime / steps;
+            // Every step the same length, however long the frame was. Handed the frame
+            // itself, the solver behaved differently on every machine and every stutter:
+            // the spring is proportional to the time given, the damping compounds once a
+            // step, and the stored motion means a different speed when replayed over a
+            // different length. A fixed step removes all three at once, and the leftover
+            // time is carried to the next frame rather than thrown away.
+            float step = 1f / Mathf.Max(1f, _simulationRate);
+            _accumulator += deltaTime;
 
-            LastDeltaTime = deltaTime;
-            LastStepCount = steps;
+            // Put the chains back where the physics actually left them before stepping
+            // again: what the bones are carrying at this point is the drawn pose, which
+            // sits between two steps, and feeding that back in would let the drawing
+            // shift the simulation.
+            if (_stepped)
+            {
+                for (int i = 0; i < _chains.Count; i++)
+                {
+                    _chains[i].ApplyPose(1f);
+                }
+            }
 
-            for (int s = 0; s < steps; s++)
+            int steps = 0;
+            while (_accumulator >= step && steps < MaxStepsPerFrame)
             {
                 for (int i = 0; i < _chains.Count; i++)
                 {
                     _chains[i].Simulate(step, _profile);
+                }
+
+                _accumulator -= step;
+                steps++;
+            }
+
+            if (steps >= MaxStepsPerFrame)
+            {
+                // Too far behind to catch up. Dropping the debt keeps a slow frame from
+                // making the next one slower still.
+                _accumulator = 0f;
+            }
+
+            _stepped |= steps > 0;
+
+            LastDeltaTime = deltaTime;
+            LastStepCount = steps;
+
+            // What is drawn is where the chain was partway through the step being
+            // rendered, not where the last completed step left it.
+            if (_stepped)
+            {
+                float alpha = Mathf.Clamp01(_accumulator / step);
+
+                for (int i = 0; i < _chains.Count; i++)
+                {
+                    _chains[i].ApplyPose(alpha);
                 }
             }
         }
@@ -228,6 +268,10 @@ namespace Fluffy
             {
                 _chains[i].ResetToRestPose();
             }
+
+            // Nothing to interpolate between any more, and no time owed.
+            _accumulator = 0f;
+            _stepped = false;
 
             transform.GetPositionAndRotation(out _lastPosition, out _lastRotation);
         }
