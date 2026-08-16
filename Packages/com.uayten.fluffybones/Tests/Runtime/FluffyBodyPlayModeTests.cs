@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -19,35 +18,18 @@ namespace Fluffy.Tests
     /// </remarks>
     public class FluffyBodyPlayModeTests
     {
-        /// <summary>Bones per tail. The same shape the edit-mode rig builds.</summary>
-        private const int BoneCount = 5;
-        private const float BoneLength = 0.25f;
-
-        private readonly List<Object> _created = new List<Object>();
-        private float _captureDeltaTime;
+        private readonly FluffyRuntimeRig _rig = new FluffyRuntimeRig();
 
         [SetUp]
         public void RememberTheClock()
         {
-            _captureDeltaTime = Time.captureDeltaTime;
+            _rig.RememberTheClock();
         }
 
         [TearDown]
         public void PutTheClockBackAndTidyUp()
         {
-            // Left behind, this pins the editor's frame rate for every test after this
-            // one and for the editor itself.
-            Time.captureDeltaTime = _captureDeltaTime;
-
-            for (int i = 0; i < _created.Count; i++)
-            {
-                if (_created[i] != null)
-                {
-                    Object.Destroy(_created[i]);
-                }
-            }
-
-            _created.Clear();
+            _rig.PutTheClockBackAndTidyUp();
         }
 
         /// <summary>
@@ -89,24 +71,24 @@ namespace Fluffy.Tests
         [UnityTest]
         public IEnumerator AStalledFrameIsCappedRatherThanCaughtUpWith()
         {
-            FluffyBones body = BuildCharacter();
+            FluffyBones body = _rig.BuildCharacter();
 
-            yield return FramesOf(1f / 60f, 1);
+            yield return FluffyRuntimeRig.FramesOf(1f / 60f, 1);
 
             // One frame that took a whole second, the way an asset import or a breakpoint
             // hands one over.
-            yield return FramesOf(1f, 1);
+            yield return FluffyRuntimeRig.FramesOf(1f, 1);
 
             Assert.That(body.LastStepCount, Is.EqualTo(8),
                 $"A one second frame ran {body.LastStepCount} steps where the cap is 8.");
 
-            float afterTheStall = WidestOffRest(body);
+            float afterTheStall = FluffyRuntimeRig.WidestOffRest(body);
 
             Assert.That(float.IsNaN(afterTheStall), Is.False, "The chain came out of the stall as NaN.");
             Assert.That(afterTheStall, Is.LessThan(90f),
                 $"The chain was {afterTheStall:0.#} degrees off its pose after one stalled frame.");
 
-            yield return FramesOf(1f / 60f, 1);
+            yield return FluffyRuntimeRig.FramesOf(1f / 60f, 1);
 
             Assert.That(body.LastStepCount, Is.LessThanOrEqualTo(1),
                 $"The frame after the stall still ran {body.LastStepCount} steps, so the debt was "
@@ -131,10 +113,10 @@ namespace Fluffy.Tests
         [UnityTest]
         public IEnumerator AJumpBeyondTheTeleportDistanceCarriesTheChainAlong()
         {
-            FluffyBones jumper = BuildCharacter();
-            FluffyBones stayer = BuildCharacter();
+            FluffyBones jumper = _rig.BuildCharacter();
+            FluffyBones stayer = _rig.BuildCharacter();
 
-            yield return FramesOf(1f / 60f, 30);
+            yield return FluffyRuntimeRig.FramesOf(1f / 60f, 30);
 
             // Far more than the default teleport distance of one unit, and far more than
             // the chain is long.
@@ -144,32 +126,12 @@ namespace Fluffy.Tests
             Assert.That(jumper.CarriedLastFrame, Is.True, "The jump was not recognised as one.");
             Assert.That(stayer.CarriedLastFrame, Is.False, "Standing still was mistaken for a jump.");
 
-            float jumped = WidestOffRest(jumper);
-            float stayed = WidestOffRest(stayer);
+            float jumped = FluffyRuntimeRig.WidestOffRest(jumper);
+            float stayed = FluffyRuntimeRig.WidestOffRest(stayer);
 
             Assert.That(jumped, Is.EqualTo(stayed).Within(0.5f),
                 $"The chain that jumped ended {jumped:0.###} degrees off its pose where the one that "
                 + $"stayed put ended {stayed:0.###}. The jump was felt by the chain.");
-        }
-
-        /// <summary>
-        /// Runs <paramref name="frames"/> frames that each last <paramref name="length"/>.
-        /// </summary>
-        /// <remarks>
-        /// One frame is thrown away first: <see cref="Time.captureDeltaTime"/> takes
-        /// effect on the frame after the one it is set in, so the frame in progress still
-        /// carries the old length. Asserting on that frame reads the previous rate and
-        /// says nothing about the one being asked for.
-        /// </remarks>
-        private static IEnumerator FramesOf(float length, int frames)
-        {
-            Time.captureDeltaTime = length;
-            yield return null;
-
-            for (int frame = 0; frame < frames; frame++)
-            {
-                yield return null;
-            }
         }
 
         /// <summary>
@@ -178,74 +140,14 @@ namespace Fluffy.Tests
         /// </summary>
         private IEnumerator SettleAndMeasure(float frameLength, float seconds, System.Action<float> report)
         {
-            FluffyBones body = BuildCharacter();
+            FluffyBones body = _rig.BuildCharacter();
 
-            yield return FramesOf(frameLength, Mathf.RoundToInt(seconds / frameLength));
+            yield return FluffyRuntimeRig.FramesOf(frameLength, Mathf.RoundToInt(seconds / frameLength));
 
-            report(WidestOffRest(body));
+            report(FluffyRuntimeRig.WidestOffRest(body));
 
             Object.Destroy(body.gameObject);
             yield return null;
-        }
-
-        /// <summary>The furthest any bone of the character's first chain sits from its pose.</summary>
-        private static float WidestOffRest(FluffyBones body)
-        {
-            var states = new List<FluffyBoneState>();
-            float widest = 0f;
-
-            for (int c = 0; c < body.Chains.Count; c++)
-            {
-                states.Clear();
-                body.Chains[c].CaptureState(states);
-
-                for (int i = 0; i < states.Count; i++)
-                {
-                    widest = Mathf.Max(widest, states[i].OffRest);
-                }
-            }
-
-            return widest;
-        }
-
-        /// <summary>
-        /// A character with one tail, found the way a user finds it: by name.
-        /// </summary>
-        /// <remarks>
-        /// Through <see cref="FluffyBones.DetectChains"/> rather than by assigning the
-        /// chain list, which is private and serialized — and going through the public
-        /// path means the detection keywords are covered by every test in the file.
-        /// </remarks>
-        private FluffyBones BuildCharacter()
-        {
-            var character = new GameObject("Character");
-            _created.Add(character);
-
-            Transform parent = character.transform;
-
-            for (int i = 0; i < BoneCount; i++)
-            {
-                var bone = new GameObject($"tail_{i:00}").transform;
-                bone.SetParent(parent, false);
-                bone.localPosition = i == 0 ? Vector3.zero : new Vector3(BoneLength, 0f, 0f);
-                parent = bone;
-            }
-
-            FluffyBones body = character.AddComponent<FluffyBones>();
-
-            // Defaults out of the asset: a return strength of 8, a drag of 0.15 and a
-            // light downward gravity, which is all this file needs and none of which
-            // requires an editor API to set.
-            var profile = ScriptableObject.CreateInstance<FluffyProfile>();
-            _created.Add(profile);
-            body.Profile = profile;
-
-            Assert.That(body.DetectChains(), Is.EqualTo(1), "The tail was not detected as a chain.");
-
-            body.Rebuild();
-            body.ResetToRestPose();
-
-            return body;
         }
     }
 }
