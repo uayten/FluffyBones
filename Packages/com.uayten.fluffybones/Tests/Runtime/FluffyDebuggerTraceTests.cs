@@ -145,6 +145,103 @@ namespace Fluffy.Tests
         }
 
         /// <summary>
+        /// A bone whose name carries a comma does not push every column after it along.
+        /// </summary>
+        /// <remarks>
+        /// Bone names come from whoever rigged the character, and a comma in one is not
+        /// exotic. Unquoted, it adds a field to that bone's rows and to no others: the
+        /// header still lines up for every other bone in the file, so it reads as correct
+        /// and is not. The failure lands on whoever opens the trace weeks later.
+        /// </remarks>
+        [UnityTest]
+        public IEnumerator ABoneNameWithACommaDoesNotShiftTheColumns()
+        {
+            const string awkward = "tail_02, the long one";
+
+            FluffyBones body = _rig.BuildCharacter();
+            FluffyDebugger debugger = body.gameObject.AddComponent<FluffyDebugger>();
+
+            foreach (Transform bone in body.GetComponentsInChildren<Transform>())
+            {
+                if (bone.name == "tail_02")
+                {
+                    bone.name = awkward;
+                }
+            }
+
+            yield return FluffyRuntimeRig.FramesOf(1f / 60f, 1);
+
+            debugger.StartRecording();
+
+            yield return FluffyRuntimeRig.FramesOf(1f / 60f, 5);
+
+            _written = debugger.StopRecording();
+
+            string[] lines = File.ReadAllLines(_written);
+            int columns = 0;
+            bool sawTheName = false;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Length == 0 || lines[i][0] == '#')
+                {
+                    continue;
+                }
+
+                if (columns == 0)
+                {
+                    columns = lines[i].Split(',').Length;
+                    continue;
+                }
+
+                Assert.That(FieldsOf(lines[i]), Has.Length.EqualTo(columns),
+                    $"A row about a bone named '{awkward}' has {FieldsOf(lines[i]).Length} fields "
+                    + $"against a header of {columns}.");
+
+                if (lines[i].Contains(awkward))
+                {
+                    sawTheName = true;
+                }
+            }
+
+            Assert.That(sawTheName, Is.True, "The awkward bone never turned up in the file.");
+        }
+
+        /// <summary>
+        /// Splits a row the way a CSV reader would: commas separate fields unless they
+        /// are inside quotes.
+        /// </summary>
+        private static string[] FieldsOf(string row)
+        {
+            var fields = new List<string>();
+            var field = new System.Text.StringBuilder();
+            bool quoted = false;
+
+            for (int i = 0; i < row.Length; i++)
+            {
+                char c = row[i];
+
+                if (c == '"')
+                {
+                    quoted = !quoted;
+                }
+                else if (c == ',' && !quoted)
+                {
+                    fields.Add(field.ToString());
+                    field.Clear();
+                }
+                else
+                {
+                    field.Append(c);
+                }
+            }
+
+            fields.Add(field.ToString());
+
+            return fields.ToArray();
+        }
+
+        /// <summary>
         /// The preamble says what the recording was made under, read off the objects
         /// rather than typed.
         /// </summary>

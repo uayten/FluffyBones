@@ -236,6 +236,36 @@ namespace Fluffy
         private void OnValidate()
         {
             _toFrame = Mathf.Max(_toFrame, _fromFrame + 1);
+            WarnIfTheFolderIsInsideAssets();
+        }
+
+        /// <summary>
+        /// Says so when the traces are about to be written where Unity will import them.
+        /// </summary>
+        /// <remarks>
+        /// A folder under Assets turns every recording into an asset: the database grows
+        /// a text file per run, each with a .meta beside it, and a long session leaves
+        /// hundreds behind. Said rather than corrected, because quietly writing somewhere
+        /// other than where the field says is worse than the mess — the person would go
+        /// looking for the file where they asked for it.
+        /// </remarks>
+        private void WarnIfTheFolderIsInsideAssets()
+        {
+            if (!Application.isEditor || string.IsNullOrEmpty(_folder))
+            {
+                return;
+            }
+
+            string resolved = Path.GetFullPath(ResolveFolder());
+            string assets = Path.GetFullPath(Application.dataPath);
+
+            if (resolved.StartsWith(assets, System.StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogWarning(
+                    $"[Fluffy Bones] '{_folder}' puts the traces inside Assets, where Unity imports "
+                    + "every one of them as a text asset. Somewhere beside the project is usually "
+                    + "what you want.", this);
+            }
         }
 
         private void OnDisable()
@@ -495,7 +525,7 @@ namespace Fluffy
             Field(Frame.ToString(invariant));
             Field(chain.ToString(invariant));
             Field(state.Index.ToString(invariant));
-            Field(state.Bone.name);
+            Field(Quoted(state.Bone.name));
 
             if (Writes(FluffyDebugColumns.Timing))
             {
@@ -556,6 +586,32 @@ namespace Fluffy
 
             _rows.Append(value);
             _fieldsWritten++;
+        }
+
+        /// <summary>
+        /// A bone's name, made safe to sit in a comma separated field.
+        /// </summary>
+        /// <remarks>
+        /// The only field in a row that is not a number, and the only one a person names.
+        /// A bone called "tail, long" would otherwise shift every column after it by one
+        /// for that row alone — the header would still line up for every other bone, so
+        /// the file would look right and read wrong. Quoting only when there is something
+        /// to quote keeps the usual file as readable by eye as it was.
+        /// </remarks>
+        private static string Quoted(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+
+            if (name.IndexOf(',') < 0 && name.IndexOf('"') < 0
+                && name.IndexOf('\n') < 0 && name.IndexOf('\r') < 0)
+            {
+                return name;
+            }
+
+            return "\"" + name.Replace("\"", "\"\"") + "\"";
         }
 
         private void AppendVector(Vector3 value, CultureInfo invariant)

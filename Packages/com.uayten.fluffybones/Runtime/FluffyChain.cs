@@ -459,6 +459,14 @@ namespace Fluffy
             // reached 90 degrees off its pose where the same average held steady kept it
             // inside 16. Scaling by the ratio is what makes the stored distance mean the
             // same speed in the new step.
+            //
+            // Worth saying, since the fixed step made it look redundant: through
+            // FluffyBones every step is the same length by construction, so this is a
+            // no-op on the ordinary path. It earns its place in the two cases that are
+            // left. Simulation Rate is a serialized field, which means it can be dragged
+            // while the game is playing — which is exactly when someone tunes it, and
+            // every drag changes the step under a chain in motion. And Simulate is public,
+            // so a project driving a chain itself passes whatever it likes.
             float stepRatio = _previousStep > 0f
                 ? Mathf.Clamp(deltaTime / _previousStep, MinStepRatio, MaxStepRatio)
                 : 1f;
