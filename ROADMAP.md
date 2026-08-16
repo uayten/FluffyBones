@@ -14,11 +14,12 @@ and what changed lives in its `CHANGELOG.md`. This file is about what to do next
 **Working.** Chains collected from the bone hierarchy and solved with Verlet on a
 fixed step, drawn between two solved steps so an uneven frame rate never reaches
 the solver. Authored default pose, shared pose assets, per-bone angle limits with
-scene gizmos, profiles with return strength, falloff, damping and gravity, chain
-detection by bone name, a bone picker that only offers the character's own bones,
-and a frame-by-frame debugger that writes CSV.
+scene gizmos, sphere and capsule colliders with a radius per chain, profiles with
+return strength, falloff, damping and gravity, chain detection by bone name, a
+bone picker that only offers the character's own bones, and a frame-by-frame
+debugger that writes CSV.
 
-**Stubbed.** `FluffyCollider` — the type exists and does nothing.
+**Stubbed.** Nothing.
 
 **Stored but not enforced.** X Twist. The solver produces pure swing; the field
 is saved, drawn and copied like the other two and restricts nothing.
@@ -29,7 +30,7 @@ is saved, drawn and copied like the other two and restricts nothing.
 
 ## 1. Tests — done, with two corners left
 
-Thirty two of them: twenty seven in `Tests/Editor`, five in `Tests/Runtime`. Every
+Forty six of them: thirty eight in `Tests/Editor`, eight in `Tests/Runtime`. Every
 one builds its own rig in code and destroys it afterwards, so nothing depends on
 a scene or an asset and nothing writes to bones that belong to one. The runtime
 assembly carries no editor API at all, since it builds for every platform — which
@@ -73,26 +74,37 @@ against its own header, in numbers an invariant parser can take
 (`FluffyBoneFieldTests`); and a falloff curve with no keys leaves the spring
 alone rather than zeroing it (`FluffyProfileTests`).
 
+Collision arrived with its own nine, in `FluffyColliderTests` and one in
+`FluffyBodyPlayModeTests`. The pose seeding that keeps a skirt from adopting a
+rest pose by accident has three in `FluffyPoseSeedingTests`.
+
 What is left untested is what has nothing worth testing yet: most of the
-inspector is IMGUI, and collision and twist have no code. Collision arrives with
-its own list — a tip pushed out of a sphere stays out, a push that a limit
-forbids loses to the limit, and a collider moving faster than the chain does not
-pass through it.
+inspector is IMGUI, and twist has no code. One case is known and not written — a
+collider moving faster than the chain can be pushed by it, which needs a shape
+swept between two steps rather than sampled at one, and there is nothing to test
+until that exists.
 
-## 2. Collision
+## 2. Collision — done, with two corners left
 
-`FluffyCollider` is a stub, and "the skirt goes through the leg" is the first
-thing anyone will report. What it needs:
+Sphere and capsule shapes, put on the bones they belong to and travelling with
+the animation. The solver pushes a tip out along the shortest way and puts it
+back on the sphere of its own bone's length; each chain carries a radius, since a
+strand is a rope rather than a line. Shapes are found at `Rebuild`, so one added
+at runtime needs another. When a shape and an angle limit disagree the limit
+wins, and the clamp after the push is what makes the bone slide along its own
+boundary rather than stop where the shape left it.
 
-- Sphere and capsule colliders, assigned per character, pushing tips out along
-  the shortest way.
-- A radius per chain, since a skirt strand is not a line.
-- Colliders found once at build rather than searched per frame.
-- Deciding what happens when a bone is pushed somewhere its angle limit forbids:
-  the limit should win, and the bone should slide along it.
+No rigidbodies and no physics scene, which was the point.
 
-Physics colliders are the obvious alternative, and the wrong one — the whole
-point of the plugin is that it needs no rigidbodies and no physics scene.
+What is left:
+
+- **An inside-out mode**, for a chain that has to stay within a volume rather
+  than outside one. The `TODO` is on `FluffyCollider`.
+- **Overlapping shapes.** One pass, in the order the character collected them, so
+  two that overlap can hand a tip back and forth and it settles on whichever is
+  last. Iterating costs every chain a second pass over every shape to pay for a
+  case a sensibly built rig does not have — worth revisiting the day a rig has
+  one.
 
 ## 3. X Twist, for real
 
@@ -135,10 +147,6 @@ was captured while it was somewhere else.
 
 - **Split `FluffyBonesEditor.cs`.** It is over a thousand lines. The tab work
   gives the seams: one file per tab, as partial classes.
-- **Seed the pose for every chain, not just the one being edited.** A chain with
-  no authored pose adopts whatever its bones happen to be at build time, so
-  anything that touches those transforms first silently becomes the rest pose.
-  This has already caused one wrecked scene.
 - **A chain with no start bone** should say so in the inspector rather than
   drawing an empty section.
 - **Undo.** The inspector writes through `SerializedObject` in most places, which
