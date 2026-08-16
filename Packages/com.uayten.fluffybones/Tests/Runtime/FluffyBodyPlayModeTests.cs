@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -132,6 +133,67 @@ namespace Fluffy.Tests
             Assert.That(jumped, Is.EqualTo(stayed).Within(0.5f),
                 $"The chain that jumped ended {jumped:0.###} degrees off its pose where the one that "
                 + $"stayed put ended {stayed:0.###}. The jump was felt by the chain.");
+        }
+
+        /// <summary>
+        /// The character finds its collision shapes when it is built, and keeps its chain
+        /// out of them while it runs.
+        /// </summary>
+        /// <remarks>
+        /// Found at build rather than per frame: a hierarchy search per chain per step is
+        /// the cost that does not show up on the one character being tested and does show
+        /// up on a crowd. The price is that a shape added later needs a rebuild, which is
+        /// the same rule the chains follow, and the test says so by adding one and
+        /// checking it is not picked up until then.
+        /// </remarks>
+        [UnityTest]
+        public IEnumerator TheCharacterFindsItsCollidersAtBuildAndStaysOutOfThem()
+        {
+            FluffyBones body = _rig.BuildCharacter();
+
+            Assert.That(body.Colliders, Is.Empty, "A character with no shapes on it found some.");
+
+            var host = new GameObject("Hip");
+            host.transform.SetParent(body.transform, false);
+            host.transform.localPosition = new Vector3(0.5f, -0.3f, 0f);
+
+            FluffyCollider sphere = host.AddComponent<FluffyCollider>();
+            sphere.Shape = FluffyColliderShape.Sphere;
+            sphere.Radius = 0.3f;
+
+            yield return FluffyRuntimeRig.FramesOf(1f / 60f, 2);
+
+            Assert.That(body.Colliders, Is.Empty,
+                "A shape added after the build was picked up without one, so the search is happening "
+                + "per frame after all.");
+
+            body.Rebuild();
+
+            Assert.That(body.Colliders, Has.Count.EqualTo(1), "A rebuild did not find the shape.");
+
+            var states = new List<FluffyBoneState>();
+            float deepest = 0f;
+
+            for (int frame = 0; frame < 120; frame++)
+            {
+                yield return null;
+
+                for (int c = 0; c < body.Chains.Count; c++)
+                {
+                    states.Clear();
+                    body.Chains[c].CaptureState(states);
+
+                    for (int i = 0; i < states.Count; i++)
+                    {
+                        Vector3 tip = states[i].Head + states[i].Direction * states[i].Length;
+                        deepest = Mathf.Max(deepest,
+                            sphere.WorldRadius - Vector3.Distance(tip, sphere.WorldCentre));
+                    }
+                }
+            }
+
+            Assert.That(deepest, Is.LessThan(0.02f),
+                $"A tip spent the run {deepest:0.####} units inside the shape.");
         }
 
         /// <summary>

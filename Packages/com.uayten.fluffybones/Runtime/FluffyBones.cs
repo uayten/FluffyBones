@@ -93,6 +93,7 @@ namespace Fluffy
         [Range(0.1f, 1.5f)]
         [SerializeField] private float _limitSize = FluffyChain.DefaultLimitSize;
 
+        private readonly List<FluffyCollider> _colliders = new List<FluffyCollider>();
         private Vector3 _lastPosition;
         private Quaternion _lastRotation = Quaternion.identity;
         private float _accumulator;
@@ -132,6 +133,9 @@ namespace Fluffy
 
         /// <summary>Chains this character simulates.</summary>
         public IReadOnlyList<FluffyChain> Chains => _chains;
+
+        /// <summary>Collision shapes found on the character at the last build.</summary>
+        public IReadOnlyList<FluffyCollider> Colliders => _colliders;
 
         /// <summary>How far the character may move between frames before being carried.</summary>
         public float TeleportDistance => _teleportDistance;
@@ -216,7 +220,7 @@ namespace Fluffy
             {
                 for (int i = 0; i < _chains.Count; i++)
                 {
-                    _chains[i].Simulate(step, _profile);
+                    _chains[i].Simulate(step, _profile, _colliders);
                 }
 
                 _accumulator -= step;
@@ -259,7 +263,28 @@ namespace Fluffy
                 _chains[i].Build(this);
             }
 
+            CollectColliders();
+
             transform.GetPositionAndRotation(out _lastPosition, out _lastRotation);
+        }
+
+        /// <summary>
+        /// Finds the collision shapes on the character, once.
+        /// </summary>
+        /// <remarks>
+        /// At build rather than per frame: a search of the hierarchy per chain per step
+        /// is the kind of cost that does not show up on the character being tested and
+        /// does show up on a crowd of them. A shape added at runtime needs a
+        /// <see cref="Rebuild"/>, which is the same rule the chains themselves follow.
+        ///
+        /// Inactive ones are collected too, since a shape switched on for one animation
+        /// is still the character's — the solver skips whatever is off when it reads
+        /// them.
+        /// </remarks>
+        public void CollectColliders()
+        {
+            _colliders.Clear();
+            GetComponentsInChildren(true, _colliders);
         }
 
         /// <summary>Snaps every chain back to its rest pose and clears the accumulated motion.</summary>
@@ -483,8 +508,6 @@ namespace Fluffy
             }
         }
 
-        // TODO: collect FluffyColliders under the character and solve every chain
-        //       against them in the same pass.
         // TODO: skip the update when the character is off screen or far from the camera.
     }
 }

@@ -85,6 +85,12 @@ namespace Fluffy
         [Min(0f)]
         [SerializeField] private float _dummyLength = DefaultDummyLength;
 
+        [Tooltip("How thick this chain is, in world units. A strand of a skirt is a rope " +
+                 "rather than a line, and this is what keeps its width off a collider " +
+                 "instead of letting it sink in up to the middle. 0 treats it as a line.")]
+        [Min(0f)]
+        [SerializeField] private float _radius;
+
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
 
@@ -128,6 +134,13 @@ namespace Fluffy
         {
             get => _lastBone;
             set => _lastBone = value;
+        }
+
+        /// <summary>How thick the chain is when pushed out of a collider, in world units.</summary>
+        public float Radius
+        {
+            get => _radius;
+            set => _radius = Mathf.Max(0f, value);
         }
 
         /// <summary>Tuning for this chain alone, or null to use the body's profile.</summary>
@@ -428,10 +441,23 @@ namespace Fluffy
             }
         }
 
-        /// <summary>Advances the chain by one step.</summary>
+        /// <summary>Advances the chain by one step, against nothing.</summary>
         /// <param name="deltaTime">Seconds since the last step.</param>
         /// <param name="fallbackProfile">Used when the chain has no override of its own.</param>
         public void Simulate(float deltaTime, FluffyProfile fallbackProfile)
+        {
+            Simulate(deltaTime, fallbackProfile, null);
+        }
+
+        /// <summary>Advances the chain by one step, keeping it out of the colliders.</summary>
+        /// <param name="deltaTime">Seconds since the last step.</param>
+        /// <param name="fallbackProfile">Used when the chain has no override of its own.</param>
+        /// <param name="colliders">
+        /// Shapes to stay out of, collected by the character at build. Null or empty
+        /// solves the chain in open air.
+        /// </param>
+        public void Simulate(
+            float deltaTime, FluffyProfile fallbackProfile, IReadOnlyList<FluffyCollider> colliders)
         {
             if (!_isBuilt || deltaTime <= 0f)
             {
@@ -514,15 +540,74 @@ namespace Fluffy
 
                 // Read now, not copied when the chain was built: the limits are authoring
                 // data and get tuned while watching the thing move.
-                direction = ApplyAngleLimits(joint, ResolveLimits(joint.BoneIndex), restRotation, direction);
+                FluffyLimits limits = ResolveLimits(joint.BoneIndex);
+                direction = ApplyAngleLimits(joint, limits, restRotation, direction);
 
                 nextTip = position + direction * joint.Length;
+
+                // Colliders after the limits and then the limits again, because the two
+                // disagree constantly and one of them has to win. The limit does: a bone
+                // shoved somewhere its cone forbids is a skirt strand folding backwards
+                // through the hip, which reads as broken, where a strand held at its limit
+                // and slightly inside a leg reads as a strand resting against a leg. The
+                // clamp is what makes the bone slide along its own boundary instead of
+                // stopping dead where the collider put it.
+                if (PushOutOfColliders(colliders, ref nextTip))
+                {
+                    direction = ApplyAngleLimits(
+                        joint, limits, restRotation, (nextTip - position).normalized);
+
+                    nextTip = position + direction * joint.Length;
+                }
 
                 joint.PreviousTip = joint.CurrentTip;
                 joint.CurrentTip = nextTip;
 
                 bone.rotation = Quaternion.FromToRotation(restDirection, nextTip - position) * restRotation;
             }
+        }
+
+        /// <summary>
+        /// Moves a tip out of every collider it has ended up inside.
+        /// </summary>
+        /// <returns>True when anything moved it.</returns>
+        /// <remarks>
+        /// One pass, in the order the character collected them. Two colliders that
+        /// overlap can therefore hand the tip back and forth — pushed out of the thigh
+        /// into the hip — and it settles on whichever comes last. Iterating would fix
+        /// that and cost every chain a second pass over every shape on the character to
+        /// pay for a case that a sensibly built rig does not have. Worth revisiting the
+        /// day someone brings a rig that does.
+        ///
+        /// The tip is left wherever the shapes put it. The caller is what puts it back on
+        /// the sphere of the bone's own length, since it has to reapply the angle limits
+        /// anyway and both end in the same normalisation.
+        /// </remarks>
+        private bool PushOutOfColliders(IReadOnlyList<FluffyCollider> colliders, ref Vector3 tip)
+        {
+            if (colliders == null || colliders.Count == 0)
+            {
+                return false;
+            }
+
+            bool pushed = false;
+
+            for (int i = 0; i < colliders.Count; i++)
+            {
+                FluffyCollider collider = colliders[i];
+
+                // Colliders are collected at build and a character can have one destroyed
+                // or switched off since — a limb that came off, a shape enabled only for
+                // one animation.
+                if (collider == null || !collider.isActiveAndEnabled)
+                {
+                    continue;
+                }
+
+                pushed |= collider.PushOut(ref tip, _radius);
+            }
+
+            return pushed;
         }
 
         /// <summary>
