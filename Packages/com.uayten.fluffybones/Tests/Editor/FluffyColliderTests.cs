@@ -448,6 +448,64 @@ namespace Fluffy.Tests.Editor
         }
 
         /// <summary>
+        /// A bone carrying a shape is as thick as that shape, and not as thick as the
+        /// number on the chain.
+        /// </summary>
+        /// <remarks>
+        /// Two identical chains dropped onto the same floor, one of them with a sphere on
+        /// its middle bone. Compared against each other rather than against a figure,
+        /// because where a chain settles is the balance of several things and only the
+        /// difference between the two is this feature.
+        ///
+        /// The sphere is not in the list either chain is solved against — a chain is never
+        /// pushed by what it carries — so the only way it can lift that bone off the floor
+        /// is by being its thickness.
+        /// </remarks>
+        [Test]
+        public void ABoneIsAsThickAsTheShapeItCarries()
+        {
+            const int Middle = 2;
+            const float Radius = 0.08f;
+
+            FluffyProfile profile = _rig.CreateProfile(
+                returnStrength: 0f, drag: 0.15f, gravity: new Vector3(0f, -9.81f, 0f));
+
+            var floor = new List<FluffyCollider> { Plane(Vector3.zero, FluffyAxis.Y) };
+
+            FluffyChain bare = _rig.BuildChain();
+            FluffyChain carrying = _rig.BuildChain();
+
+            FluffyCollider own = carrying.GetBones()[Middle].gameObject.AddComponent<FluffyCollider>();
+            own.Shape = FluffyColliderShape.Sphere;
+            own.Radius = Radius;
+            carrying.RefreshShapes();
+
+            for (int i = 0; i < 120; i++)
+            {
+                bare.Simulate(SixtiethOfASecond, profile, floor);
+                carrying.Simulate(SixtiethOfASecond, profile, floor);
+            }
+
+            float bareTip = TipHeight(bare, Middle);
+            float carryingTip = TipHeight(carrying, Middle);
+
+            Assert.That(carryingTip - bareTip, Is.GreaterThan(Radius * 0.5f),
+                $"The bone carrying a sphere of {Radius} settled at {carryingTip:0.###} against the bare "
+                + $"chain's {bareTip:0.###}. Its shape is not being used as its thickness.");
+        }
+
+        /// <summary>Where a bone's tip ended up, straight up and down.</summary>
+        private static float TipHeight(FluffyChain chain, int bone)
+        {
+            var states = new List<FluffyBoneState>();
+            chain.CaptureState(states);
+
+            FluffyBoneState state = states[bone];
+
+            return (state.Head + state.Direction * state.Length).y;
+        }
+
+        /// <summary>
         /// A chain owns the shapes riding on its own bones, and nothing else's.
         /// </summary>
         /// <remarks>

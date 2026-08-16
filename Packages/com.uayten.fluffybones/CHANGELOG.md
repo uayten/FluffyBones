@@ -38,6 +38,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   character pairs each chain with the shapes it faces once at `Rebuild`. Chains are
   solved in list order, so a shape riding one is where the last step left it when
   the next is solved against it.
+- A bone carrying a shape is as thick as that shape when it is pushed out of the
+  blockers, and the chain's own thickness is the fallback for the bones that carry
+  none. One number for a whole chain cannot say that a cape is wide at the
+  shoulders and narrow at the hem, and a shape on a bone already says how wide the
+  chain is there — it is what the other chains bump into. The same capsule now does
+  both jobs, and the width is authored by dragging it in the scene rather than
+  typed. A sphere and a capsule are as thick as their radius; a box as thick as its
+  narrowest half, since a cape panel is a flat box and the flat direction is the
+  answer; a plane has no thickness and falls back to the number.
+- **Show Thickness**, in the Collision tab: draws each chain as a tube of the width
+  it is actually solved at. That width is added to every shape the chain meets, so
+  a shape is drawn at its own size while pushing from further out — set by
+  accident, it reads as a collider reaching across the room to shove a chain
+  nowhere near it, with nothing to see. The chain thickness field also says its
+  unit now, and warns when it is out of scale with the chain's own bones: 1 against
+  bones a quarter of a unit long is four bones of skin on every shape.
 - The Collision tab keeps the two kinds of shape apart, each with its own Add row
   whose bone picker offers only the bones that make a shape of that kind. They are
   the same component and differ only in what they are parented to, so nothing else

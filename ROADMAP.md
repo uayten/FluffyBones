@@ -34,7 +34,7 @@ debugger that writes CSV.
 
 ## 1. Tests — done, with two corners left
 
-Sixty three of them: fifty five in `Tests/Editor`, eight in `Tests/Runtime`. Every
+Sixty four of them: fifty six in `Tests/Editor`, eight in `Tests/Runtime`. Every
 one builds its own rig in code and destroys it afterwards, so nothing depends on
 a scene or an asset and nothing writes to bones that belong to one. The runtime
 assembly carries no editor API at all, since it builds for every platform — which
@@ -79,8 +79,8 @@ against its own header, in numbers an invariant parser can take
 alone rather than zeroing it (`FluffyProfileTests`).
 
 Collision arrived with its own nine, in `FluffyColliderTests` and one in
-`FluffyBodyPlayModeTests`, and gained four more when shapes learned to turn and to
-ride a chain. The pose seeding that keeps a skirt from adopting a rest pose by
+`FluffyBodyPlayModeTests`, and gained five more when shapes learned to turn, to
+ride a chain, and to be the thickness of the bone they ride. The pose seeding that keeps a skirt from adopting a rest pose by
 accident has three in `FluffyPoseSeedingTests`, and the switch that leaves a bone
 to its animation has five in `FluffyChainBoneSwitchTests`. Twist has five of its
 own in `FluffyChainTwistTests`: that a bone is left behind by a rig rolling under
@@ -101,7 +101,16 @@ with the animation — which is what lifts a skirt when the leg lifts. The plane
 has no size: everything on the wrong side of it is brought to the surface, so one
 on the spine is the whole of "the hair never falls forward". The solver pushes a
 tip out along the shortest way and puts it back on the sphere of its own bone's
-length; each chain carries a radius, since a strand is a rope rather than a line.
+length.
+
+How thick the chain is where it is pushed comes from the shape riding that bone,
+and from the chain's own radius only where a bone carries none. One number for a
+whole chain cannot say that a cape is wide at the shoulders and narrow at the hem,
+and a shape put on a bone already says exactly how wide the chain is there — it is
+the thing the other chains bump into. So the same capsule does both jobs, and the
+width is authored by dragging it about rather than typed. It is still a point
+against a shape: the tip is a point and the capsule covers the whole bone, so this
+is a better number rather than a second kind of collision.
 Shapes are found at `Rebuild`, so one added at runtime needs another. When a
 shape and an angle limit disagree the limit wins, and the clamp after the push is
 what makes the bone slide along its own boundary rather than stop where the shape

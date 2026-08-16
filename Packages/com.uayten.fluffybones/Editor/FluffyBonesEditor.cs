@@ -88,6 +88,7 @@ namespace Fluffy.Editor
         private SerializedProperty _showLimits;
         private SerializedProperty _boneColor;
         private SerializedProperty _limitSize;
+        private SerializedProperty _showThickness;
         private SerializedProperty _simulationRate;
 
         /// <summary>Which face of the component the inspector is showing.</summary>
@@ -121,6 +122,7 @@ namespace Fluffy.Editor
             _showLimits = serializedObject.FindProperty("_showLimits");
             _boneColor = serializedObject.FindProperty("_boneColor");
             _limitSize = serializedObject.FindProperty("_limitSize");
+            _showThickness = serializedObject.FindProperty("_showThickness");
             _simulationRate = serializedObject.FindProperty("_simulationRate");
 
             _tab = (Tab)EditorPrefs.GetInt(TabPreference, 0);

@@ -93,6 +93,11 @@ namespace Fluffy
         [Range(0.1f, 1.5f)]
         [SerializeField] private float _limitSize = FluffyChain.DefaultLimitSize;
 
+        [Tooltip("Draw each chain as a tube of its own thickness. That thickness is added " +
+                 "to every shape the chain meets, and it is the one setting here with no " +
+                 "shape of its own in the scene to look at.")]
+        [SerializeField] private bool _showThickness;
+
         private readonly List<FluffyCollider> _colliders = new List<FluffyCollider>();
 
         /// <summary>Per chain, the shapes it is pushed out of: all but the ones it carries.</summary>
@@ -291,6 +296,13 @@ namespace Fluffy
             GetComponentsInChildren(true, _colliders);
 
             SortCollidersByChain();
+
+            // A shape put on a bone is also how thick that bone is, so the chains have to
+            // find the one they are now carrying.
+            for (int i = 0; i < _chains.Count; i++)
+            {
+                _chains[i].RefreshShapes();
+            }
         }
 
         /// <summary>
@@ -541,6 +553,14 @@ namespace Fluffy
                 if (_showAxes)
                 {
                     _chains[i].DrawAxisGizmos();
+                }
+
+                if (_showThickness)
+                {
+                    // Faded, because it is a width around the bones rather than a thing of
+                    // its own, and at full strength it swallows the bones inside it.
+                    Gizmos.color = new Color(_boneColor.r, _boneColor.g, _boneColor.b, _boneColor.a * 0.4f);
+                    _chains[i].DrawThicknessGizmos();
                 }
 
                 if (_showLimits)

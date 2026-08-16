@@ -44,6 +44,10 @@ namespace Fluffy
         private const float TwistCircleScale = 0.35f;
         private const float TwistCircleOffset = 0.5f;
 
+        /// <summary>Lines along a drawn tube, and segments round its rings.</summary>
+        private const int ThicknessRails = 4;
+        private const int RingSegments = 16;
+
         // Shared by the axis lines and the limit shapes, so an arc and the axis it
         // belongs to are obviously the same thing.
         private static readonly Color AxisXColor = new Color(0.93f, 0.35f, 0.35f);
@@ -87,7 +91,10 @@ namespace Fluffy
 
         [Tooltip("How thick this chain is, in world units. A strand of a skirt is a rope " +
                  "rather than a line, and this is what keeps its width off a collider " +
-                 "instead of letting it sink in up to the middle. 0 treats it as a line.")]
+                 "instead of letting it sink in up to the middle. 0 treats it as a line. " +
+                 "Added to every shape the chain is solved against, so a thickness larger " +
+                 "than the chain's own bones makes every shape reach much further than it " +
+                 "is drawn.")]
         [Min(0f)]
         [SerializeField] private float _radius;
 
@@ -232,6 +239,7 @@ namespace Fluffy
                     NormalizedDepth = i / (float)(bones.Count - 1),
                     CurrentTip = tip,
                     PreviousTip = tip,
+                    OwnShape = ShapeOn(bone),
 
                     // The bones were put into the rest pose above, so this is the frame the
                     // first step will measure the rig's roll against. Left at identity it
@@ -593,7 +601,7 @@ namespace Fluffy
                 // and slightly inside a leg reads as a strand resting against a leg. The
                 // clamp is what makes the bone slide along its own boundary instead of
                 // stopping dead where the collider put it.
-                if (PushOutOfColliders(colliders, ref nextTip))
+                if (PushOutOfColliders(colliders, ThicknessAt(joint), ref nextTip))
                 {
                     direction = ApplyAngleLimits(
                         joint, limits, restRotation, (nextTip - position).normalized);
@@ -688,7 +696,8 @@ namespace Fluffy
         /// the sphere of the bone's own length, since it has to reapply the angle limits
         /// anyway and both end in the same normalisation.
         /// </remarks>
-        private bool PushOutOfColliders(IReadOnlyList<FluffyCollider> colliders, ref Vector3 tip)
+        private static bool PushOutOfColliders(
+            IReadOnlyList<FluffyCollider> colliders, float thickness, ref Vector3 tip)
         {
             if (colliders == null || colliders.Count == 0)
             {
@@ -709,7 +718,7 @@ namespace Fluffy
                     continue;
                 }
 
-                pushed |= collider.PushOut(ref tip, _radius);
+                pushed |= collider.PushOut(ref tip, thickness);
             }
 
             return pushed;
@@ -847,6 +856,83 @@ namespace Fluffy
             }
 
             Gizmos.color = color;
+        }
+
+        /// <summary>
+        /// Draws the chain at the width it is actually solved at: a tube of the chain's
+        /// own thickness around every bone it simulates.
+        /// </summary>
+        /// <remarks>
+        /// The thickness is the one setting in the collision tab with nothing of its own
+        /// in the scene. It belongs to the chain rather than to any shape, and it is added
+        /// to every shape the chain meets — so each shape is drawn at its own size while
+        /// pushing from this much further out. Set by accident, it reads as a collider
+        /// reaching across the room to shove a chain nowhere near it, and there is nothing
+        /// to see. Drawing the rope is what turns the number back into a thing.
+        ///
+        /// Bones the solver leaves alone are left out, since nothing pushes them and a
+        /// tube around one would promise a width that is never used.
+        /// </remarks>
+        public void DrawThicknessGizmos()
+        {
+            if (_startBone == null)
+            {
+                return;
+            }
+
+            List<Transform> bones = CollectForDrawing();
+
+            for (int i = 0; i < bones.Count; i++)
+            {
+                if (IsSkipped(i) || (!_useDummyBone && HasVirtualTip(bones, i)))
+                {
+                    continue;
+                }
+
+                // Resolved off the bone rather than off the joint, since the chain is not
+                // built while the scene is only being edited and this has to draw there
+                // most of all.
+                float thickness = ShapeThickness(ShapeOn(bones[i]), _radius);
+                if (thickness <= 0f)
+                {
+                    continue;
+                }
+
+                Vector3 head = bones[i].position;
+                Vector3 tip = ResolveTip(bones, i);
+                Vector3 along = tip - head;
+
+                if (along.sqrMagnitude < MinBoneLength)
+                {
+                    continue;
+                }
+
+                BuildSwingFrame(along.normalized, out Vector3 towardsY, out Vector3 towardsZ);
+                DrawRing(head, towardsY, towardsZ, thickness);
+
+                // Rails, so two rings read as a tube rather than as a pair of loose hoops.
+                for (int rail = 0; rail < ThicknessRails; rail++)
+                {
+                    Vector3 offset = TwistPoint(towardsY, towardsZ, thickness, rail * (360f / ThicknessRails));
+                    Gizmos.DrawLine(head + offset, tip + offset);
+                }
+
+                DrawRing(tip, towardsY, towardsZ, thickness);
+            }
+        }
+
+        private static void DrawRing(Vector3 centre, Vector3 towardsY, Vector3 towardsZ, float radius)
+        {
+            Vector3 previous = centre + TwistPoint(towardsY, towardsZ, radius, 0f);
+
+            for (int step = 1; step <= RingSegments; step++)
+            {
+                Vector3 point = centre
+                                + TwistPoint(towardsY, towardsZ, radius, step * (360f / RingSegments));
+
+                Gizmos.DrawLine(previous, point);
+                previous = point;
+            }
         }
 
         /// <summary>
@@ -1314,6 +1400,87 @@ namespace Fluffy
             return limits.Clamped;
         }
 
+        /// <summary>
+        /// How thick the chain is at one bone: the shape riding that bone when it carries
+        /// one, and the chain's own thickness otherwise.
+        /// </summary>
+        /// <remarks>
+        /// A cape is not one width from the shoulders to the hem, and a single number for
+        /// the whole chain cannot say so. A shape put on a bone already says exactly how
+        /// wide the chain is there — it is the thing the other chains bump into — so it
+        /// may as well be what keeps this one off the leg too. Authored by dragging a
+        /// capsule about in the scene rather than by guessing at a number.
+        ///
+        /// Read through the reference rather than measured at build, so dragging a
+        /// capsule's radius shows up in the same frame.
+        /// </remarks>
+        private float ThicknessAt(Joint joint)
+        {
+            return ShapeThickness(joint.OwnShape, _radius);
+        }
+
+        /// <summary>
+        /// How thick a shape makes the bone it rides, or <paramref name="fallback"/> when
+        /// there is nothing usable on it.
+        /// </summary>
+        /// <remarks>
+        /// A sphere and a capsule are as thick as their radius. A box is as thick as its
+        /// narrowest half: a cape panel is a flat box, and the flat direction is the one
+        /// that answers how thick the cape is there. A plane has no thickness at all, so
+        /// a bone carrying one falls back to the chain's number.
+        /// </remarks>
+        internal static float ShapeThickness(FluffyCollider shape, float fallback)
+        {
+            if (shape == null || !shape.isActiveAndEnabled)
+            {
+                return fallback;
+            }
+
+            switch (shape.Shape)
+            {
+                case FluffyColliderShape.Sphere:
+                case FluffyColliderShape.Capsule:
+                    return shape.WorldRadius;
+
+                case FluffyColliderShape.Box:
+                    Vector3 half = shape.WorldHalfSize;
+                    return Mathf.Min(half.x, Mathf.Min(half.y, half.z));
+
+                default:
+                    return fallback;
+            }
+        }
+
+        /// <summary>
+        /// The shape riding a bone, which is the one on the bone itself.
+        /// </summary>
+        /// <remarks>
+        /// The bone's own object rather than anything below it: a shape hung off a child
+        /// sits somewhere else, and its size says nothing about how thick the bone is
+        /// where the bone is. A bone carrying two takes the first, which is the one nearer
+        /// the top of its inspector.
+        /// </remarks>
+        internal static FluffyCollider ShapeOn(Transform bone)
+        {
+            return bone == null ? null : bone.GetComponent<FluffyCollider>();
+        }
+
+        /// <summary>
+        /// Looks up the shape riding each bone again, without rebuilding the chain.
+        /// </summary>
+        /// <remarks>
+        /// A full rebuild would do it and would also pose every bone to measure it, which
+        /// is not what adding a collider in the inspector should do to a chain somebody is
+        /// in the middle of tuning.
+        /// </remarks>
+        public void RefreshShapes()
+        {
+            for (int i = 0; i < _joints.Count; i++)
+            {
+                _joints[i].OwnShape = ShapeOn(_joints[i].Transform);
+            }
+        }
+
         /// <summary>Whether the bone at <paramref name="index"/> is left out of the simulation.</summary>
         /// <remarks>
         /// Read out of the same pose the limits come from, so a shared pose asset turns a
@@ -1572,6 +1739,12 @@ namespace Fluffy
 
             /// <summary>Position along the chain: 0 at the root, 1 at the tip.</summary>
             public float NormalizedDepth;
+
+            /// <summary>
+            /// The shape riding this bone, whose size is how thick the chain is here.
+            /// Null on a bone that carries none, which falls back to the chain's number.
+            /// </summary>
+            public FluffyCollider OwnShape;
 
             /// <summary>World-space tip position this step.</summary>
             public Vector3 CurrentTip;

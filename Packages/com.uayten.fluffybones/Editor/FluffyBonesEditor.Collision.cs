@@ -334,18 +334,60 @@ namespace Fluffy.Editor
 
             EditorGUILayout.LabelField("Chain thickness", EditorStyles.boldLabel);
 
+            EditorGUILayout.PropertyField(_showThickness, new GUIContent("Show Thickness"));
+
+            DrawNote("A strand is a rope rather than a line. Without a thickness it sinks into a leg up "
+                     + "to its middle before anything stops it. In world units, and added to every shape "
+                     + "the chain is solved against — a strand is usually a fraction of one of its own "
+                     + "bones.\n\nThis is the fallback. A bone carrying a shape of its own is as thick as "
+                     + "that shape instead, so a cape can be wide at the shoulders and narrow at the hem "
+                     + "without a number being typed anywhere.");
+
             for (int i = 0; i < _chains.arraySize; i++)
             {
                 SerializedProperty chain = _chains.GetArrayElementAtIndex(i);
                 var start = chain.FindPropertyRelative("_startBone").objectReferenceValue as Transform;
+                SerializedProperty radius = chain.FindPropertyRelative("_radius");
 
                 EditorGUILayout.PropertyField(
-                    chain.FindPropertyRelative("_radius"),
-                    new GUIContent(start != null ? start.name : $"Chain {i}"));
+                    radius, new GUIContent(start != null ? start.name : $"Chain {i}"));
+
+                WarnIfTheChainIsThickerThanItsBones(radius, start);
+            }
+        }
+
+        /// <summary>
+        /// Says so when a chain's thickness is out of scale with the chain itself.
+        /// </summary>
+        /// <remarks>
+        /// The thickness is added to every shape, so it is the one number here that makes
+        /// a shape act far larger than the box drawn in the scene. It reads as a collider
+        /// reaching across the room and pushing a tail that is nowhere near it, and there
+        /// is nothing in the scene view to see, because the shape is drawn at its own size
+        /// and the thickness belongs to the chain.
+        ///
+        /// Caught once on a tail with bones a quarter of a unit long and a thickness of 1,
+        /// which is four bones: the whole tail was inside the shape wherever the shape was
+        /// put.
+        /// </remarks>
+        private static void WarnIfTheChainIsThickerThanItsBones(SerializedProperty radius, Transform start)
+        {
+            if (start == null || radius.floatValue <= 0f)
+            {
+                return;
             }
 
-            DrawNote("A strand is a rope rather than a line. Without a thickness it sinks into a leg up "
-                     + "to its middle before anything stops it.");
+            float bone = EstimateBoneLength(start);
+            if (bone <= 0f || radius.floatValue <= bone * 0.5f)
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                $"{radius.floatValue:0.###} is {radius.floatValue / bone:0.#} of this chain's own bones, "
+                + $"which are {bone:0.###} long. Every shape is that much bigger for this chain than it "
+                + $"looks in the scene. About {bone * 0.1f:0.###} is a strand.",
+                MessageType.Warning);
         }
 
         private void AddCollider(FluffyBones body, Transform bone, FluffyColliderShape shape)
