@@ -108,7 +108,7 @@ namespace Fluffy.Editor
         /// another character, or from the project, is refused rather than silently
         /// producing a chain that reaches across the scene.
         /// </summary>
-        private static Transform ResolveBone(UnityEngine.Object[] dragged, Transform root)
+        internal static Transform ResolveBone(UnityEngine.Object[] dragged, Transform root)
         {
             if (dragged == null || root == null)
             {
