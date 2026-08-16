@@ -59,6 +59,13 @@ crashlytics-build.properties
 *_BackUpThisFolder_ButDontShipItWithYourGame*/
 
 # ---------------------------------------------------------------------------
+# Fluffy Bones traces
+# ---------------------------------------------------------------------------
+# Written beside the project by FluffyDebugger. One run per file, named by the
+# clock, so they pile up fast and none of them describes the plugin.
+/FluffyDebug/
+
+# ---------------------------------------------------------------------------
 # OS
 # ---------------------------------------------------------------------------
 .DS_Store

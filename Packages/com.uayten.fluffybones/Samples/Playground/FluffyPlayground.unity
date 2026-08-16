@@ -206,7 +206,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 149304724}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.55998987, w: 0.82849944}
+  m_LocalRotation: {x: 0, y: 0, z: -0.55482227, w: 0.8319689}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -676,7 +676,7 @@ Transform:
   m_GameObject: {fileID: 498225318}
   serializedVersion: 2
   m_LocalRotation: {x: 0.05233596, y: 0, z: 0, w: 0.9986295}
-  m_LocalPosition: {x: 0, y: 1.1, z: -5}
+  m_LocalPosition: {x: 3.06, y: 1.1, z: -13.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -902,6 +902,7 @@ GameObject:
   - component: {fileID: 611819798}
   - component: {fileID: 611819797}
   - component: {fileID: 611819796}
+  - component: {fileID: 611819799}
   m_Layer: 0
   m_Name: Tail Character
   m_TagString: Untagged
@@ -921,8 +922,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 35267b8170a2e404191a9f5a45d9cc8f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FluffyBones.Samples::Fluffy.Samples.FluffySway
-  _travel: {x: 1.2, y: 0, z: 0}
-  _turn: 35
+  _travel: {x: 1.7, y: 0, z: 0}
+  _turn: 0
   _speed: 0.4
   _teleport: {x: 0, y: 0, z: 6}
 --- !u!114 &611819797
@@ -948,9 +949,9 @@ MonoBehaviour:
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
-      Twist: {x: 0, y: 0}
-      SwingY: {x: -25.525131, y: 0}
-      SwingZ: {x: 0, y: 0}
+      Twist: {x: -180, y: 180}
+      SwingY: {x: -12, y: 12}
+      SwingZ: {x: -12, y: 12}
     _defaultPose:
     - Rotation: {x: 0, y: 0, z: -67.39695}
       OverrideLimits: 0
@@ -998,7 +999,8 @@ MonoBehaviour:
   - chain
   - ribbon
   - ear
-  _teleportThreshold: 1
+  _teleportDistance: 25
+  _simulationRate: 60
   _showBones: 1
   _boneColor: {r: 1, g: 0.55, b: 0.8, a: 1}
   _showAxes: 1
@@ -1012,14 +1014,35 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 611819795}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -1.41, y: 0, z: -3.68}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.8000127, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 389173426}
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &611819799
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 611819795}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e401b553dd231e248b18447362cb26f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FluffyBones.Runtime::Fluffy.FluffyDebugger
+  _body: {fileID: 611819797}
+  _startBone: {fileID: 0}
+  _endBone: {fileID: 0}
+  _automatic: 0
+  _fromFrame: 120
+  _toFrame: 420
+  _maxFrames: 3600
+  _columns: 7
+  _folder: FluffyDebug
 --- !u!1 &663408336
 GameObject:
   m_ObjectHideFlags: 0
@@ -1108,7 +1131,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 725375202}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.000000031977624, y: 0.000000057321643, z: 0.51330435, w: 0.8582066}
+  m_LocalRotation: {x: 0, y: 0, z: 0.53342944, w: 0.84584457}
   m_LocalPosition: {x: 0.25, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1294,7 +1317,8 @@ MonoBehaviour:
   - chain
   - ribbon
   - ear
-  _teleportThreshold: 1
+  _teleportDistance: 1
+  _simulationRate: 60
   _showBones: 1
   _boneColor: {r: 1, g: 0.55, b: 0.8, a: 1}
   _showAxes: 0
@@ -1309,7 +1333,7 @@ Transform:
   m_GameObject: {fileID: 742118145}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.72, y: 0, z: 3.04}
+  m_LocalPosition: {x: 8.02, y: 0, z: 3.04}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1498,7 +1522,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 917320174}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.000000016004416, y: 0.0000000827604, z: -0.006511151, w: 0.9999788}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.25, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -2003,7 +2027,8 @@ MonoBehaviour:
   - chain
   - ribbon
   - ear
-  _teleportThreshold: 1
+  _teleportDistance: 1
+  _simulationRate: 60
   _showBones: 1
   _boneColor: {r: 1, g: 0.55, b: 0.8, a: 1}
   _showAxes: 0
@@ -2018,7 +2043,7 @@ Transform:
   m_GameObject: {fileID: 1238427042}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.8, y: 0, z: 0}
+  m_LocalPosition: {x: 4.01, y: 0, z: 1.51}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2112,7 +2137,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1343423896}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: -0.24051253, z: -0.66494644, w: 0.70710677}
+  m_LocalRotation: {x: 0.000000029802326, y: -0.24051248, z: -0.66494644, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0, z: 0.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -2493,7 +2518,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1674295256}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.00000004207693, y: -0.000000030649883, z: 0.47147113, w: 0.8818815}
+  m_LocalRotation: {x: 0, y: 0, z: 0.5057941, w: 0.86265427}
   m_LocalPosition: {x: 0.25, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -2944,7 +2969,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2049834379}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.0000000027305764, y: 0.000000007610164, z: 0.38980502, w: 0.9208974}
+  m_LocalRotation: {x: 0, y: 0, z: 0.3996563, w: 0.9166651}
   m_LocalPosition: {x: 0.25, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -3103,7 +3128,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2132774311}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.000000048930946, y: -0.00000003374199, z: -0.0028122333, w: 0.99999607}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.25, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
