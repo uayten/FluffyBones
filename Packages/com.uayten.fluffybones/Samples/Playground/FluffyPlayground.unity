@@ -191,6 +191,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 149304725}
+  - component: {fileID: 149304726}
   m_Layer: 0
   m_Name: tail_01
   m_TagString: Untagged
@@ -214,6 +215,27 @@ Transform:
   - {fileID: 917320175}
   m_Father: {fileID: 389173426}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &149304726
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 149304724}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4a6d54bce7ac6c4f93d0b81b0c7411a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FluffyBones.Runtime::Fluffy.FluffyCollider
+  _shape: 3
+  _centre: {x: 0, y: 0, z: 0}
+  _rotation: {x: 0, y: 0, z: 0}
+  _radius: 0.06
+  _height: 0.37
+  _size: {x: 0.24999999, y: 0.24999999, z: 0.24999999}
+  _direction: 1
+  _draw: 1
+  _colour: {r: 0.36, g: 0.62, b: 1, a: 0.9}
 --- !u!1 &272322820
 GameObject:
   m_ObjectHideFlags: 0
@@ -515,12 +537,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d4a6d54bce7ac6c4f93d0b81b0c7411a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FluffyBones.Runtime::Fluffy.FluffyCollider
-  _shape: 1
-  _centre: {x: -0.15, y: 0, z: 0}
+  _shape: 2
+  _centre: {x: -0.36, y: -0.19, z: 0}
   _rotation: {x: 0, y: 0, z: 0}
-  _radius: 0.14
-  _height: 1.45
-  _size: {x: 0.02, y: 0.02, z: 0.02}
+  _radius: 0.01
+  _height: 0.04
+  _size: {x: 0.64, y: 0.57, z: 0.73}
   _direction: 1
   _draw: 1
   _colour: {r: 0.36, g: 0.62, b: 1, a: 0.9}
@@ -923,7 +945,7 @@ MonoBehaviour:
     _useDummyBone: 1
     _autoDummyLength: 1
     _dummyLength: 0.1
-    _radius: 1
+    _radius: 0.03
     _profileOverride: {fileID: 0}
     _pose: {fileID: 0}
     _globalLimits:
@@ -985,11 +1007,12 @@ MonoBehaviour:
   - ear
   _teleportDistance: 25
   _simulationRate: 60
-  _showBones: 0
+  _showBones: 1
   _boneColor: {r: 1, g: 0.55, b: 0.8, a: 1}
   _showAxes: 0
   _showLimits: 0
   _limitSize: 0.8
+  _showThickness: 1
 --- !u!4 &611819798
 Transform:
   m_ObjectHideFlags: 0
@@ -1320,6 +1343,7 @@ MonoBehaviour:
   _showAxes: 0
   _showLimits: 0
   _limitSize: 0.8
+  _showThickness: 0
 --- !u!4 &742118148
 Transform:
   m_ObjectHideFlags: 0
@@ -2238,6 +2262,7 @@ MonoBehaviour:
   _showAxes: 0
   _showLimits: 0
   _limitSize: 0.8
+  _showThickness: 0
 --- !u!4 &1238427045
 Transform:
   m_ObjectHideFlags: 0
