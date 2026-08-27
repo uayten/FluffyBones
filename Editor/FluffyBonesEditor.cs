@@ -1148,11 +1148,13 @@ namespace Fluffy.Editor
 
         private void DrawProfile()
         {
+            var assigned = _profile.objectReferenceValue as FluffyProfile;
+
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.PropertyField(_profile, new GUIContent("Profile"));
 
-                using (new EditorGUI.DisabledScope(_profile.objectReferenceValue == null))
+                using (new EditorGUI.DisabledScope(assigned == null))
                 {
                     if (GUILayout.Button("Duplicate", GUILayout.Width(70f)))
                     {
@@ -1163,6 +1165,15 @@ namespace Fluffy.Editor
                 if (GUILayout.Button("New", GUILayout.Width(46f)))
                 {
                     CreateProfile();
+                }
+
+                // Beside the slot the profile was picked in, rather than under the
+                // settings they apply to: what is written is the asset named here, not
+                // the character whose inspector it is borrowing.
+                if (FluffyProfileEditor.DrawSaveButtons(assigned) && _profileEditor != null)
+                {
+                    _profileEditor.serializedObject.Update();
+                    Repaint();
                 }
             }
 
@@ -1190,6 +1201,11 @@ namespace Fluffy.Editor
             if (_profileEditor == null)
             {
                 return;
+            }
+
+            if (_profileEditor is FluffyProfileEditor profileEditor)
+            {
+                profileEditor.SaveControlsDrawnElsewhere = true;
             }
 
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))

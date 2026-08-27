@@ -157,6 +157,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed in this release
 
+- **Save** and **Revert** for a profile, beside Duplicate and New in the row the
+  profile is chosen in. A profile is an asset, so Unity held every edit in memory
+  and wrote it out whenever the project next saved: nothing was lost, but nothing
+  said so either, and a value dragged too far had no way back except dragging it
+  again by eye. Both buttons are dead while the asset is clean, so the pair
+  doubles as the indicator that was missing. Selecting the asset on its own draws
+  them under its settings instead, over a line reading "Saved" or "Unsaved
+  changes", there being no row of buttons there to join.
 - A character may carry more than one `FluffyBones`. Chains that behave nothing
   alike — a heavy tail and the light stripes down a trouser leg — can have a
   component each, which reads better in the inspector than one list whose entries

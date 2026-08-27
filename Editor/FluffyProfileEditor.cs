@@ -1,4 +1,5 @@
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace Fluffy.Editor
@@ -36,6 +37,26 @@ namespace Fluffy.Editor
             "Constant world acceleration, in units per second squared. A light droop "
             + "usually reads better than a physical -9.81.");
 
+        /// <summary>
+        /// Set by an inspector that draws the buttons itself, in a row of its own.
+        /// </summary>
+        /// <remarks>
+        /// The character's inspector puts them beside Duplicate and New, where the
+        /// profile is chosen, so drawing them here as well would show them twice in
+        /// the one panel.
+        /// </remarks>
+        public bool SaveControlsDrawnElsewhere { get; set; }
+
+        private static readonly GUIContent SaveLabel = new GUIContent(
+            "Save",
+            "Write this profile to its file now, instead of waiting for the project to "
+            + "save. Greyed out when the file already matches what is on screen.");
+
+        private static readonly GUIContent RevertLabel = new GUIContent(
+            "Revert",
+            "Throw away the edits made since the last save and read the values back "
+            + "from the file.");
+
         private SerializedProperty _returnStrength;
         private SerializedProperty _returnStrengthFalloff;
         private SerializedProperty _drag;
@@ -64,6 +85,114 @@ namespace Fluffy.Editor
             EditorGUIUtility.labelWidth = previousWidth;
 
             serializedObject.ApplyModifiedProperties();
+
+            if (!SaveControlsDrawnElsewhere)
+            {
+                DrawSaveControls();
+            }
+        }
+
+        /// <summary>Writes the asset to disk, and puts it back the way it was on disk.</summary>
+        /// <remarks>
+        /// A profile is an asset, so Unity holds every edit in memory and writes it
+        /// out whenever the project next saves. Nothing goes missing that way, but
+        /// nothing on screen says so either: there is no telling whether the file
+        /// matches the sliders, and a value dragged too far has no way back except
+        /// dragging it again by eye. Both buttons are dead while the asset is clean,
+        /// which makes the pair as much an indicator as a control — greyed out means
+        /// the file agrees with what is drawn.
+        /// </remarks>
+        private void DrawSaveControls()
+        {
+            var profile = (FluffyProfile)target;
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(
+                    HasUnsavedChanges(profile) ? "Unsaved changes" : "Saved",
+                    EditorStyles.miniLabel);
+
+                GUILayout.FlexibleSpace();
+
+                if (DrawSaveButtons(profile))
+                {
+                    serializedObject.Update();
+                    Repaint();
+                }
+            }
+        }
+
+        /// <summary>Whether the profile holds edits its file has not been given yet.</summary>
+        /// <remarks>
+        /// An asset that was never written has nothing to compare against and nothing
+        /// to revert to; writing it for the first time belongs to whoever is creating
+        /// it.
+        /// </remarks>
+        public static bool HasUnsavedChanges(FluffyProfile profile)
+        {
+            return profile != null
+                   && !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(profile))
+                   && EditorUtility.IsDirty(profile);
+        }
+
+        /// <summary>
+        /// The Revert and Save pair, for a row the caller has already opened.
+        /// </summary>
+        /// <returns>
+        /// True when the profile was reverted, so a caller holding a
+        /// <see cref="SerializedObject"/> over it knows to read it again.
+        /// </returns>
+        public static bool DrawSaveButtons(FluffyProfile profile)
+        {
+            bool dirty = HasUnsavedChanges(profile);
+            bool reverted = false;
+
+            using (new EditorGUI.DisabledScope(!dirty))
+            {
+                if (GUILayout.Button(RevertLabel, GUILayout.Width(56f)))
+                {
+                    RevertToDisk(profile, AssetDatabase.GetAssetPath(profile));
+                    reverted = true;
+                }
+
+                if (GUILayout.Button(SaveLabel, GUILayout.Width(46f)))
+                {
+                    AssetDatabase.SaveAssetIfDirty(profile);
+                }
+            }
+
+            return reverted;
+        }
+
+        /// <summary>Puts the profile back to the values held in its file.</summary>
+        /// <remarks>
+        /// The file is read into throwaway objects rather than through
+        /// <see cref="AssetDatabase.LoadAssetAtPath"/>, which hands back the instance
+        /// already loaded — the edited one — and would revert it to itself. The
+        /// throwaways are destroyed here because nothing else owns them: forgetting
+        /// them leaks a profile per press.
+        /// </remarks>
+        private static void RevertToDisk(FluffyProfile profile, string path)
+        {
+            Object[] fromDisk = InternalEditorUtility.LoadSerializedFileAndForget(path);
+
+            for (int i = 0; i < fromDisk.Length; i++)
+            {
+                if (fromDisk[i] is FluffyProfile saved)
+                {
+                    Undo.RecordObject(profile, "Revert Fluffy Profile");
+                    EditorUtility.CopySerialized(saved, profile);
+
+                    // It now matches the file, so it is no longer waiting to be written.
+                    EditorUtility.ClearDirty(profile);
+                    break;
+                }
+            }
+
+            for (int i = 0; i < fromDisk.Length; i++)
+            {
+                Object.DestroyImmediate(fromDisk[i]);
+            }
         }
     }
 }
