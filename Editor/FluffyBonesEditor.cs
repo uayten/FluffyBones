@@ -151,6 +151,8 @@ namespace Fluffy.Editor
             DrawTabs();
             EditorGUILayout.Space();
 
+            DrawSharedBoneWarning();
+
             switch (_tab)
             {
                 case Tab.Setup:
@@ -254,6 +256,97 @@ namespace Fluffy.Editor
                 var last = chain.FindPropertyRelative("_lastBone").objectReferenceValue as Transform;
                 SeedPose(chain.FindPropertyRelative("_defaultPose"), FluffyChain.CollectChain(start, last));
             }
+        }
+
+        /// <summary>
+        /// Warns when another Fluffy Bones on this character drives a bone this one
+        /// drives too.
+        /// </summary>
+        /// <remarks>
+        /// A character may carry several of these on purpose: a heavy tail and the
+        /// light stripes down a trouser leg want nothing to do with each other's
+        /// tuning, and two components read better than one list whose entries
+        /// disagree. What a character may not do is hand the same bone to two of
+        /// them. Both write a rotation to it every frame and the one that runs last
+        /// wins, which comes down to the order Unity happens to hold the components
+        /// in — so the bone looks solved while quietly ignoring one component's
+        /// settings, and nothing reaches the console to say why. Detect chains is
+        /// the usual way in: run on two components, it matches the same bones twice.
+        /// </remarks>
+        private void DrawSharedBoneWarning()
+        {
+            if (targets.Length > 1)
+            {
+                return;
+            }
+
+            var body = (FluffyBones)target;
+            HashSet<Transform> mine = BonesDrivenBy(body);
+
+            if (mine.Count == 0)
+            {
+                return;
+            }
+
+            // From the root of the scene object rather than this GameObject: the advice
+            // is to keep every component together on the character, but a rig that has
+            // one parented further down is exactly the case worth catching.
+            FluffyBones[] siblings = body.transform.root.GetComponentsInChildren<FluffyBones>(true);
+
+            for (int i = 0; i < siblings.Length; i++)
+            {
+                FluffyBones other = siblings[i];
+                if (other == body)
+                {
+                    continue;
+                }
+
+                foreach (Transform bone in BonesDrivenBy(other))
+                {
+                    if (!mine.Contains(bone))
+                    {
+                        continue;
+                    }
+
+                    EditorGUILayout.HelpBox(
+                        $"'{bone.name}' is driven by this component and by the Fluffy Bones "
+                        + $"on '{other.name}'. Two solvers on one bone fight every frame and "
+                        + "the winner is whichever Unity runs last. Give the bone to one of "
+                        + "them and shorten the other chain, using Last Bone to stop it "
+                        + "before the overlap.",
+                        MessageType.Warning);
+
+                    return;
+                }
+            }
+        }
+
+        /// <summary>Every bone the component's chains would drive, built from the rig.</summary>
+        /// <remarks>
+        /// Read from the bone hierarchy rather than from a built chain, so it answers
+        /// for a chain typed in a moment ago that the component has not rebuilt yet.
+        /// </remarks>
+        private static HashSet<Transform> BonesDrivenBy(FluffyBones body)
+        {
+            var bones = new HashSet<Transform>();
+            IReadOnlyList<FluffyChain> chains = body.Chains;
+
+            for (int i = 0; i < chains.Count; i++)
+            {
+                Transform start = chains[i].StartBone;
+                if (start == null)
+                {
+                    continue;
+                }
+
+                List<Transform> collected = FluffyChain.CollectChain(start, chains[i].LastBone);
+                for (int b = 0; b < collected.Count; b++)
+                {
+                    bones.Add(collected[b]);
+                }
+            }
+
+            return bones;
         }
 
         private void DrawSetupTab()

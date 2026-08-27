@@ -10,21 +10,37 @@ namespace Fluffy
         /// <summary>One chain: a tail, a ponytail, a single cable.</summary>
         Single,
 
-        /// <summary>Several chains sharing one setup: a skirt, a cape, a head of hair.</summary>
+        /// <summary>
+        /// Several chains under one component: a skirt, a cape, a head of hair. They
+        /// share the component's profile unless a chain overrides it with its own.
+        /// </summary>
         Multiple
     }
 
     /// <summary>
     /// The Fluffy Bones component. Goes on the character, holds its bone chains
-    /// and steps them together, so the whole character is solved in one ordered
+    /// and steps them together, so the chains it carries are solved in one ordered
     /// pass after the animation has been applied.
     /// </summary>
     /// <remarks>
     /// Pick <see cref="FluffyChainMode.Single"/> for one tail or ponytail, or
     /// <see cref="FluffyChainMode.Multiple"/> for a skirt, where a dozen strands
-    /// hang off the same hips and share one profile.
+    /// hang off the same hips and want the same tuning.
+    ///
+    /// A character may carry more than one of these. Chains that behave nothing
+    /// alike — a heavy tail and the light stripes on a trouser leg — can each have
+    /// a component of their own, which reads better in the inspector than one list
+    /// whose entries disagree. The alternative is a single component in
+    /// <see cref="FluffyChainMode.Multiple"/> with a per-chain profile override;
+    /// both are supported and neither is the required way.
+    ///
+    /// Put every one of them on the same GameObject as the others — the root of the
+    /// character. Each component finds its collision shapes by searching below
+    /// itself, so components sharing a root all see the whole character and push
+    /// their chains out of each other's shapes. One parented further down the
+    /// skeleton would only ever find the shapes beneath it, and would walk through
+    /// the rest of the body.
     /// </remarks>
-    [DisallowMultipleComponent]
     [AddComponentMenu("Fluffy Bones/Fluffy Bones")]
     public class FluffyBones : MonoBehaviour
     {
@@ -36,8 +52,9 @@ namespace Fluffy
         private const int MaxStepsPerFrame = 8;
 
 
-        [Tooltip("Single: one chain, like a tail. Multiple: many chains sharing one " +
-                 "profile, like the strands of a skirt.")]
+        [Tooltip("Single: one chain, like a tail. Multiple: many chains, like the " +
+                 "strands of a skirt. They share this component's profile unless a " +
+                 "chain fills in its own Profile Override.")]
         [SerializeField] private FluffyChainMode _mode = FluffyChainMode.Single;
 
         [Tooltip("The behaviour asset. Reusable across chains and characters — one " +

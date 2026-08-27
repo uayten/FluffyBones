@@ -157,6 +157,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed in this release
 
+- A character may carry more than one `FluffyBones`. Chains that behave nothing
+  alike — a heavy tail and the light stripes down a trouser leg — can have a
+  component each, which reads better in the inspector than one list whose entries
+  disagree; a single component in Multiple mode with a per-chain profile override
+  still does the same job. Components sharing a GameObject each see the whole
+  character's shapes, so their chains are still pushed out of each other. The
+  inspector warns when two of them drive the same bone, which is the one
+  arrangement that does not work: both write to it every frame and the winner is
+  whichever Unity runs last.
 - `FluffyProfile.Stiffness` is now `ReturnStrength`, shown as "Strength to
   Return to Default Pose", and `EvaluateStiffness` is `EvaluateReturnStrength`.
   The drag value is labelled "Damping", which is what it always was.
