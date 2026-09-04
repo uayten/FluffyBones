@@ -101,8 +101,9 @@ namespace Fluffy
         [Tooltip("Tuning for this chain alone. Empty falls back to the body's profile.")]
         [SerializeField] private FluffyProfile _profileOverride;
 
-        [Tooltip("A saved pose, shared with other chains. Empty keeps the rotations on " +
-                 "this chain alone.")]
+        [Tooltip("A saved pose of local rotation offsets, shared with other chains. " +
+                 "Each chain keeps its own rest orientation. Empty keeps the rotations " +
+                 "on this chain alone.")]
         [SerializeField] private FluffyPose _pose;
 
         [Tooltip("Limits every bone takes unless it overrides them. Used when no pose " +
@@ -1286,6 +1287,7 @@ namespace Fluffy
             }
 
             List<Transform> bones = CollectChain(_startBone, _lastBone);
+            EnsureReferencePose(bones);
             FluffyBonePose[] existing = PoseData;
             var captured = new FluffyBonePose[bones.Count];
 
@@ -1293,7 +1295,14 @@ namespace Fluffy
             {
                 bool kept = existing != null && i < existing.Length;
 
-                captured[i] = new FluffyBonePose(bones[i].localRotation.eulerAngles)
+                Quaternion capturedRotation = bones[i].localRotation;
+                if (_pose != null && _pose.UsesLocalRotationOffsets)
+                {
+                    capturedRotation = Quaternion.Inverse(GetReferenceRotation(bones, i)) *
+                        capturedRotation;
+                }
+
+                captured[i] = new FluffyBonePose(capturedRotation.eulerAngles)
                 {
                     // Capture reads rotations off the scene; the limits were authored and
                     // have nothing to do with where the bones happen to be.
@@ -1319,6 +1328,42 @@ namespace Fluffy
         {
             get => _pose;
             set => _pose = value;
+        }
+
+        /// <summary>
+        /// Converts an older absolute local-rotation asset into offsets from this
+        /// chain's rest pose. The same offsets can then be shared by rotated chains.
+        /// </summary>
+        public bool ConvertSharedPoseToLocalRotationOffsets()
+        {
+            if (_pose == null || _pose.UsesLocalRotationOffsets || _startBone == null)
+            {
+                return false;
+            }
+
+            List<Transform> bones = CollectChain(_startBone, _lastBone);
+            EnsureReferencePose(bones);
+
+            FluffyBonePose[] source = _pose.Bones;
+            if (source == null)
+            {
+                _pose.UseLocalRotationOffsets();
+                return true;
+            }
+
+            var converted = (FluffyBonePose[])source.Clone();
+            int count = Mathf.Min(converted.Length, bones.Count);
+            for (int i = 0; i < count; i++)
+            {
+                Quaternion absoluteRotation = Quaternion.Euler(converted[i].Rotation);
+                Quaternion localOffset =
+                    Quaternion.Inverse(GetReferenceRotation(bones, i)) * absoluteRotation;
+                converted[i].Rotation = localOffset.eulerAngles;
+            }
+
+            _pose.SetBones(converted);
+            _pose.UseLocalRotationOffsets();
+            return true;
         }
 
         /// <summary>
@@ -1556,10 +1601,48 @@ namespace Fluffy
             {
                 // A pose longer than the chain hands its first entries to the bones that
                 // exist; a shorter one leaves the rest where the model put them.
-                rotations[i] = i < posed ? Quaternion.Euler(pose[i].Rotation) : bones[i].localRotation;
+                if (i >= posed)
+                {
+                    rotations[i] = bones[i].localRotation;
+                    continue;
+                }
+
+                Quaternion poseRotation = Quaternion.Euler(pose[i].Rotation);
+                rotations[i] = _pose != null && _pose.UsesLocalRotationOffsets
+                    ? GetReferenceRotation(bones, i) * poseRotation
+                    : poseRotation;
             }
 
             return rotations;
+        }
+
+        private void EnsureReferencePose(List<Transform> bones)
+        {
+            int existingCount = _defaultPose?.Length ?? 0;
+            if (existingCount >= bones.Count)
+            {
+                return;
+            }
+
+            var expanded = new FluffyBonePose[bones.Count];
+            if (_defaultPose != null)
+            {
+                Array.Copy(_defaultPose, expanded, _defaultPose.Length);
+            }
+
+            for (int i = existingCount; i < bones.Count; i++)
+            {
+                expanded[i] = new FluffyBonePose(bones[i].localRotation.eulerAngles);
+            }
+
+            _defaultPose = expanded;
+        }
+
+        private Quaternion GetReferenceRotation(List<Transform> bones, int index)
+        {
+            return _defaultPose != null && index < _defaultPose.Length
+                ? Quaternion.Euler(_defaultPose[index].Rotation)
+                : bones[index].localRotation;
         }
 
         /// <summary>

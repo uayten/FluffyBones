@@ -20,7 +20,7 @@ namespace Fluffy
     [Serializable]
     public struct FluffyBonePose
     {
-        [Tooltip("Local rotation the bone rests at, as euler angles.")]
+        [Tooltip("Local rest rotation, or a local offset when stored in a relative pose asset, as euler angles.")]
         public Vector3 Rotation;
 
         [Tooltip("Leave this bone to whatever is animating it instead of simulating it. " +

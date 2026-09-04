@@ -110,7 +110,15 @@ namespace Fluffy.Editor
                 FluffyBoneField.Draw(row, StartBoneLabel, start, root);
 
                 row.y += line + spacing;
-                FluffyBoneField.Draw(row, LastBoneLabel, last, root);
+                Transform automaticLast = last.objectReferenceValue == null
+                    ? FluffyBoneField.FindAutomaticLastBone(startBone)
+                    : null;
+                FluffyBoneField.Draw(
+                    row,
+                    LastBoneLabel,
+                    last,
+                    root,
+                    automaticLast != null ? automaticLast.name + " (Auto)" : null);
 
                 row.y += line + spacing;
                 DrawDummyToggle(row, property);

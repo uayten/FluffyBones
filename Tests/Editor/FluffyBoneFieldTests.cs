@@ -49,6 +49,19 @@ namespace Fluffy.Tests.Editor
                 Is.SameAs(middle));
         }
 
+        [Test]
+        public void TheAutomaticLastBoneIsTheLeafOfTheFirstChildPath()
+        {
+            Transform start = _rig.BuildSkeleton(4);
+            Transform expected = start.GetChild(0).GetChild(0).GetChild(0);
+
+            // A side branch must not change the path the runtime chain itself follows.
+            _rig.AddBone(start, "side_branch", Vector3.up);
+
+            Assert.That(FluffyBoneField.FindAutomaticLastBone(start), Is.SameAs(expected));
+            Assert.That(FluffyBoneField.FindAutomaticLastBone(null), Is.Null);
+        }
+
         /// <summary>
         /// A bone belonging to another character is refused, and refused even when it
         /// arrives first in the same drag.

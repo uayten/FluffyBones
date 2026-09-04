@@ -13,7 +13,6 @@ namespace Fluffy.Editor
     [CustomEditor(typeof(FluffyBones))]
     public partial class FluffyBonesEditor : UnityEditor.Editor
     {
-        private const string ProfileFolderHint = "Assets";
         private const float BoneLabelWidth = 110f;
         private const float PoseAssetLabelWidth = 175f;
         private const float AxisLabelWidth = 13f;
@@ -112,6 +111,11 @@ namespace Fluffy.Editor
 
         private void OnEnable()
         {
+            if (target == null)
+            {
+                return;
+            }
+
             _mode = serializedObject.FindProperty("_mode");
             _profile = serializedObject.FindProperty("_profile");
             _chains = serializedObject.FindProperty("_chains");
@@ -144,6 +148,11 @@ namespace Fluffy.Editor
 
         public override void OnInspectorGUI()
         {
+            if (target == null || _chains == null)
+            {
+                return;
+            }
+
             serializedObject.Update();
 
             SeedAllChains(_chains);
@@ -223,7 +232,7 @@ namespace Fluffy.Editor
         }
 
         /// <summary>
-        /// Gives every chain a pose, not only the one the dropdown is showing.
+        /// Gives every chain its own rest pose, not only the one the dropdown is showing.
         /// </summary>
         /// <remarks>
         /// A chain with no pose of its own takes whatever its bones happen to be when it
@@ -233,19 +242,14 @@ namespace Fluffy.Editor
         /// scene wrecked once already, seven strands of a skirt adopting a pose they were
         /// left in by accident.
         ///
-        /// Chains reading a shared pose asset are left alone: their pose is a file, and
-        /// writing to it on behalf of one chain would change every chain sharing it.
+        /// A shared pose asset stores offsets, while this private pose preserves the
+        /// distinct local rest orientation that those offsets are applied to.
         /// </remarks>
         internal static void SeedAllChains(SerializedProperty chains)
         {
             for (int i = 0; i < chains.arraySize; i++)
             {
                 SerializedProperty chain = chains.GetArrayElementAtIndex(i);
-
-                if (chain.FindPropertyRelative("_pose").objectReferenceValue != null)
-                {
-                    continue;
-                }
 
                 var start = chain.FindPropertyRelative("_startBone").objectReferenceValue as Transform;
                 if (start == null)
@@ -471,16 +475,23 @@ namespace Fluffy.Editor
             SerializedProperty chain = _chains.GetArrayElementAtIndex(0);
             Transform character = ((FluffyBones)target).transform;
 
+            SerializedProperty startBone = chain.FindPropertyRelative("_startBone");
+            SerializedProperty lastBone = chain.FindPropertyRelative("_lastBone");
+
             FluffyBoneField.Draw(
                 new GUIContent("Start Bone", "Where the chain starts."),
-                chain.FindPropertyRelative("_startBone"),
+                startBone,
                 character);
 
+            Transform automaticLast = lastBone.objectReferenceValue == null
+                ? FluffyBoneField.FindAutomaticLastBone(startBone.objectReferenceValue as Transform)
+                : null;
             FluffyBoneField.Draw(
                 new GUIContent("Last Bone", "Where the chain stops, included. "
                                             + "Leave empty to run to the end of the hierarchy."),
-                chain.FindPropertyRelative("_lastBone"),
-                character);
+                lastBone,
+                character,
+                automaticLast != null ? automaticLast.name + " (Auto)" : null);
 
             FluffyChainDrawer.DrawDummyToggle(EditorGUILayout.GetControlRect(), chain);
             FluffyChainDrawer.DrawDummyLength(EditorGUILayout.GetControlRect(), chain);
@@ -581,6 +592,9 @@ namespace Fluffy.Editor
 
             List<Transform> bones = FluffyChain.CollectChain(startBone, lastBone);
             SerializedProperty poseAsset = chain.FindPropertyRelative("_pose");
+            SerializedProperty referencePose = chain.FindPropertyRelative("_defaultPose");
+            var assignedPose = poseAsset.objectReferenceValue as FluffyPose;
+            bool usesLocalOffsets = assignedPose != null && assignedPose.UsesLocalRotationOffsets;
 
             // With an asset assigned, the rows edit the asset — which is what lets eight
             // skirt strands share one pose and be posed once.
@@ -595,14 +609,14 @@ namespace Fluffy.Editor
                 owner.Update();
             }
 
-            SeedPose(pose, bones);
+            SeedPose(pose, bones, usesLocalOffsets);
 
             if (rotations && DrawSubSection("Chain Bones Rotation Asset", ref _rotationsExpanded))
             {
                 using (new EditorGUI.IndentLevelScope())
                 {
                     DrawPoseAsset(poseAsset);
-                    DrawRotationRows(pose, bones);
+                    DrawRotationRows(pose, bones, referencePose, usesLocalOffsets);
                     DrawTrimButton(pose, bones.Count, owner);
                 }
             }
@@ -618,7 +632,11 @@ namespace Fluffy.Editor
             }
         }
 
-        private static void DrawRotationRows(SerializedProperty pose, List<Transform> bones)
+        private static void DrawRotationRows(
+            SerializedProperty pose,
+            List<Transform> bones,
+            SerializedProperty referencePose,
+            bool usesLocalOffsets)
         {
             for (int i = 0; i < pose.arraySize; i++)
             {
@@ -627,7 +645,19 @@ namespace Fluffy.Editor
 
                 if (i < bones.Count)
                 {
-                    DrawBoneRotation(rotation, bones[i].name, bones[i]);
+                    Quaternion referenceRotation =
+                        referencePose != null && i < referencePose.arraySize
+                            ? Quaternion.Euler(
+                                referencePose.GetArrayElementAtIndex(i)
+                                    .FindPropertyRelative(nameof(FluffyBonePose.Rotation))
+                                    .vector3Value)
+                            : bones[i].localRotation;
+                    DrawBoneRotation(
+                        rotation,
+                        bones[i].name,
+                        bones[i],
+                        referenceRotation,
+                        usesLocalOffsets);
                     continue;
                 }
 
@@ -840,6 +870,8 @@ namespace Fluffy.Editor
 
         private void DrawPoseAsset(SerializedProperty poseAsset)
         {
+            var assigned = poseAsset.objectReferenceValue as FluffyPose;
+
             using (new EditorGUILayout.HorizontalScope())
             {
                 float previous = EditorGUIUtility.labelWidth;
@@ -847,14 +879,30 @@ namespace Fluffy.Editor
 
                 EditorGUILayout.PropertyField(poseAsset, new GUIContent(
                     "Chain Bones Rotation Asset",
-                    "A saved pose, shared with other chains. Rotations are local, so one "
-                    + "asset fits every chain with the same bones."));
+                    "A saved pose of local rotation offsets. Each chain keeps its own "
+                    + "rest orientation, so one asset fits differently rotated chains."));
 
                 EditorGUIUtility.labelWidth = previous;
+
+                using (new EditorGUI.DisabledScope(assigned == null))
+                {
+                    if (GUILayout.Button("Duplicate", GUILayout.Width(70f)))
+                    {
+                        DuplicatePoseAsset(poseAsset);
+                    }
+                }
 
                 if (GUILayout.Button("New", GUILayout.Width(46f)))
                 {
                     CreatePoseAsset(poseAsset);
+                }
+
+                if (FluffyAssetEditorUtility.DrawSaveButtons(assigned, "Revert Fluffy Pose"))
+                {
+                    _poseSerialized?.Update();
+                    ApplyDefaultPose((FluffyBones)target);
+                    SceneView.RepaintAll();
+                    Repaint();
                 }
             }
 
@@ -892,7 +940,10 @@ namespace Fluffy.Editor
         /// scene so the fields show real rotations rather than zeros. Entries beyond the
         /// chain are left alone — a pose written for a longer chain stays intact.
         /// </summary>
-        internal static void SeedPose(SerializedProperty pose, List<Transform> bones)
+        internal static void SeedPose(
+            SerializedProperty pose,
+            List<Transform> bones,
+            bool useLocalOffsets = false)
         {
             if (pose.arraySize >= bones.Count)
             {
@@ -906,7 +957,9 @@ namespace Fluffy.Editor
             {
                 SerializedProperty entry = pose.GetArrayElementAtIndex(i);
                 entry.FindPropertyRelative(nameof(FluffyBonePose.Rotation)).vector3Value =
-                    NormalizeEuler(bones[i].localRotation.eulerAngles);
+                    useLocalOffsets
+                        ? Vector3.zero
+                        : NormalizeEuler(bones[i].localRotation.eulerAngles);
                 entry.FindPropertyRelative(nameof(FluffyBonePose.OverrideLimits)).boolValue = false;
 
                 // Growing a serialized array copies the last entry into the new ones, so a
@@ -928,18 +981,45 @@ namespace Fluffy.Editor
                 "FluffyPose",
                 "asset",
                 "Where should the pose be saved?",
-                ProfileFolderHint);
+                FluffyAssetEditorUtility.LastFolder);
 
             if (string.IsNullOrEmpty(path))
             {
                 return;
             }
 
+            FluffyAssetEditorUtility.RememberFolder(path);
             var pose = CreateInstance<FluffyPose>();
+            pose.UseLocalRotationOffsets();
             AssetDatabase.CreateAsset(pose, path);
             AssetDatabase.SaveAssets();
 
             poseAsset.objectReferenceValue = pose;
+        }
+
+        private void DuplicatePoseAsset(SerializedProperty poseAsset)
+        {
+            string source = AssetDatabase.GetAssetPath(poseAsset.objectReferenceValue);
+            if (string.IsNullOrEmpty(source))
+            {
+                return;
+            }
+
+            string path = EditorUtility.SaveFilePanelInProject(
+                "Duplicate Fluffy Pose",
+                Path.GetFileNameWithoutExtension(source) + " Copy",
+                "asset",
+                "Where should the copy live?",
+                FluffyAssetEditorUtility.LastFolder);
+
+            if (string.IsNullOrEmpty(path) || !AssetDatabase.CopyAsset(source, path))
+            {
+                return;
+            }
+
+            FluffyAssetEditorUtility.RememberFolder(path);
+            AssetDatabase.SaveAssets();
+            poseAsset.objectReferenceValue = AssetDatabase.LoadAssetAtPath<FluffyPose>(path);
         }
 
         private void CopySettingsToAllChains()
@@ -947,13 +1027,39 @@ namespace Fluffy.Editor
             var body = (FluffyBones)target;
 
             serializedObject.ApplyModifiedProperties();
-            Undo.RecordObject(body, "Copy Fluffy Chain Setup");
-
-            int changed = body.CopySettingsToAllChains(_editingChain);
-            EditorUtility.SetDirty(body);
+            int changed = CopySettingsToAllChainsAndRefresh(body, _editingChain);
             serializedObject.Update();
 
             Debug.Log($"[Fluffy Bones] Copied the setup onto {changed} other chain(s) on '{body.name}'.", body);
+        }
+
+        internal static int CopySettingsToAllChainsAndRefresh(FluffyBones body, int sourceIndex)
+        {
+            List<Transform> bones = body.CollectBones();
+            Undo.RecordObject(body, "Copy Fluffy Chain Setup");
+            if (bones.Count > 0)
+            {
+                Undo.RecordObjects(bones.ToArray(), "Apply Copied Fluffy Chain Setup");
+            }
+
+            if (sourceIndex >= 0 && sourceIndex < body.Chains.Count)
+            {
+                FluffyChain source = body.Chains[sourceIndex];
+                if (source.Pose != null && !source.Pose.UsesLocalRotationOffsets)
+                {
+                    Undo.RecordObject(source.Pose, "Convert Fluffy Pose To Local Offsets");
+                    if (source.ConvertSharedPoseToLocalRotationOffsets())
+                    {
+                        EditorUtility.SetDirty(source.Pose);
+                    }
+                }
+            }
+
+            int changed = body.CopySettingsToAllChains(sourceIndex);
+            body.ApplyDefaultPose();
+            EditorUtility.SetDirty(body);
+            SceneView.RepaintAll();
+            return changed;
         }
 
         private int DrawChainSelector()
@@ -971,7 +1077,12 @@ namespace Fluffy.Editor
             return EditorGUILayout.Popup(new GUIContent("Editing Chain"), index, names);
         }
 
-        private static void DrawBoneRotation(SerializedProperty rotation, string label, Transform bone = null)
+        private static void DrawBoneRotation(
+            SerializedProperty rotation,
+            string label,
+            Transform bone = null,
+            Quaternion referenceRotation = default,
+            bool usesLocalOffsets = false)
         {
             Rect row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
 
@@ -1012,7 +1123,10 @@ namespace Fluffy.Editor
             // Move the bone now rather than waiting for the next rebuild, so the scene
             // view follows the field while it is being dragged.
             Undo.RecordObject(bone, "Edit Fluffy Default Pose");
-            bone.localRotation = Quaternion.Euler(euler);
+            Quaternion editedRotation = Quaternion.Euler(euler);
+            bone.localRotation = usesLocalOffsets
+                ? referenceRotation * editedRotation
+                : editedRotation;
         }
 
         /// <summary>
@@ -1266,13 +1380,14 @@ namespace Fluffy.Editor
                 "FluffyProfile",
                 "asset",
                 "Where should the behaviour asset live?",
-                ProfileFolderHint);
+                FluffyAssetEditorUtility.LastFolder);
 
             if (string.IsNullOrEmpty(path))
             {
                 return;
             }
 
+            FluffyAssetEditorUtility.RememberFolder(path);
             var profile = CreateInstance<FluffyProfile>();
             AssetDatabase.CreateAsset(profile, path);
             AssetDatabase.SaveAssets();
@@ -1293,13 +1408,14 @@ namespace Fluffy.Editor
                 Path.GetFileNameWithoutExtension(source) + " Copy",
                 "asset",
                 "Where should the copy live?",
-                Path.GetDirectoryName(source));
+                FluffyAssetEditorUtility.LastFolder);
 
             if (string.IsNullOrEmpty(path) || !AssetDatabase.CopyAsset(source, path))
             {
                 return;
             }
 
+            FluffyAssetEditorUtility.RememberFolder(path);
             AssetDatabase.SaveAssets();
             _profile.objectReferenceValue = AssetDatabase.LoadAssetAtPath<FluffyProfile>(path);
         }

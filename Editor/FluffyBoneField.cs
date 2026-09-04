@@ -19,13 +19,22 @@ namespace Fluffy.Editor
     public static class FluffyBoneField
     {
         /// <summary>Draws the bone slot on the next layout line.</summary>
-        public static void Draw(GUIContent label, SerializedProperty property, Transform root)
+        public static void Draw(
+            GUIContent label,
+            SerializedProperty property,
+            Transform root,
+            string emptyDisplayName = null)
         {
-            Draw(EditorGUILayout.GetControlRect(), label, property, root);
+            Draw(EditorGUILayout.GetControlRect(), label, property, root, emptyDisplayName);
         }
 
         /// <summary>Draws the bone slot in <paramref name="position"/>.</summary>
-        public static void Draw(Rect position, GUIContent label, SerializedProperty property, Transform root)
+        public static void Draw(
+            Rect position,
+            GUIContent label,
+            SerializedProperty property,
+            Transform root,
+            string emptyDisplayName = null)
         {
             var current = property.objectReferenceValue as Transform;
 
@@ -36,7 +45,8 @@ namespace Fluffy.Editor
                 root,
                 canPick: null,
                 dragged => property.objectReferenceValue = dragged,
-                out Rect fieldRect);
+                out Rect fieldRect,
+                emptyDisplayName);
 
             if (!clicked || !HasRoot(root))
             {
@@ -90,7 +100,8 @@ namespace Fluffy.Editor
             Action<Transform> onPicked,
             Func<Transform, bool> canPick = null)
         {
-            bool clicked = DrawSlot(position, label, current, root, canPick, onPicked, out Rect fieldRect);
+            bool clicked = DrawSlot(
+                position, label, current, root, canPick, onPicked, out Rect fieldRect);
 
             if (!clicked || !HasRoot(root))
             {
@@ -117,17 +128,44 @@ namespace Fluffy.Editor
             Transform root,
             Func<Transform, bool> canPick,
             Action<Transform> onDragged,
-            out Rect fieldRect)
+            out Rect fieldRect,
+            string emptyDisplayName = null)
         {
             fieldRect = EditorGUI.PrefixLabel(position, label);
 
             HandleDragAndDrop(fieldRect, root, canPick, onDragged);
 
+            bool showingAutomaticBone = current == null && !string.IsNullOrEmpty(emptyDisplayName);
             var content = new GUIContent(
-                current != null ? current.name : "None (Bone)",
-                current != null ? EditorGUIUtility.IconContent("Avatar Icon").image : null);
+                showingAutomaticBone ? emptyDisplayName : current != null ? current.name : "None (Bone)",
+                current != null || showingAutomaticBone
+                    ? EditorGUIUtility.IconContent("Avatar Icon").image
+                    : null,
+                showingAutomaticBone
+                    ? "Automatically detected end bone. Assign Last Bone to override it."
+                    : string.Empty);
 
-            return GUI.Button(fieldRect, content, EditorStyles.objectField);
+            Color previousColor = GUI.contentColor;
+            if (showingAutomaticBone)
+            {
+                GUI.contentColor = EditorStyles.miniLabel.normal.textColor;
+            }
+
+            bool clicked = GUI.Button(fieldRect, content, EditorStyles.objectField);
+            GUI.contentColor = previousColor;
+            return clicked;
+        }
+
+        /// <summary>The leaf reached by the same first-child walk used by an automatic chain.</summary>
+        internal static Transform FindAutomaticLastBone(Transform start)
+        {
+            Transform current = start;
+            while (current != null && current.childCount > 0)
+            {
+                current = current.GetChild(0);
+            }
+
+            return current;
         }
 
         private static bool HasRoot(Transform root)

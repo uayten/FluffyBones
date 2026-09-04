@@ -140,6 +140,44 @@ namespace Fluffy.Tests.Editor
         }
 
         /// <summary>
+        /// Copying a chain from the inspector updates the target transforms immediately,
+        /// so the Scene view shows the copied pose without an unrelated axis edit.
+        /// </summary>
+        [Test]
+        public void CopyingAChainSetupImmediatelyAppliesItToTheOtherBones()
+        {
+            SerializedObject serialized = TwoChains(out Transform[] starts);
+            SerializedProperty chains = serialized.FindProperty("_chains");
+
+            FluffyBonesEditor.SeedAllChains(chains);
+
+            SerializedProperty sourcePose = chains.GetArrayElementAtIndex(0)
+                .FindPropertyRelative("_defaultPose");
+            for (int i = 0; i < sourcePose.arraySize; i++)
+            {
+                sourcePose.GetArrayElementAtIndex(i)
+                    .FindPropertyRelative(nameof(FluffyBonePose.Rotation))
+                    .vector3Value = new Vector3(0f, 0f, 11f * (i + 1));
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            int changed = FluffyBonesEditor.CopySettingsToAllChainsAndRefresh(
+                (FluffyBones)serialized.targetObject,
+                0);
+
+            Assert.That(changed, Is.EqualTo(1));
+
+            var targetBones = FluffyChain.CollectChain(starts[1]);
+            for (int i = 0; i < targetBones.Count; i++)
+            {
+                Quaternion expected = Quaternion.Euler(0f, 0f, 11f * (i + 1));
+                Assert.That(Quaternion.Angle(targetBones[i].localRotation, expected), Is.LessThan(0.01f),
+                    $"Target bone {i} did not update to the copied pose in the Scene view.");
+            }
+        }
+
+        /// <summary>
         /// A character with two chains, each on its own skeleton, the way a skirt of two
         /// strands is set up.
         /// </summary>

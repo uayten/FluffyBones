@@ -1,5 +1,4 @@
 using UnityEditor;
-using UnityEditorInternal;
 using UnityEngine;
 
 namespace Fluffy.Editor
@@ -46,16 +45,6 @@ namespace Fluffy.Editor
         /// the one panel.
         /// </remarks>
         public bool SaveControlsDrawnElsewhere { get; set; }
-
-        private static readonly GUIContent SaveLabel = new GUIContent(
-            "Save",
-            "Write this profile to its file now, instead of waiting for the project to "
-            + "save. Greyed out when the file already matches what is on screen.");
-
-        private static readonly GUIContent RevertLabel = new GUIContent(
-            "Revert",
-            "Throw away the edits made since the last save and read the values back "
-            + "from the file.");
 
         private SerializedProperty _returnStrength;
         private SerializedProperty _returnStrengthFalloff;
@@ -130,9 +119,7 @@ namespace Fluffy.Editor
         /// </remarks>
         public static bool HasUnsavedChanges(FluffyProfile profile)
         {
-            return profile != null
-                   && !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(profile))
-                   && EditorUtility.IsDirty(profile);
+            return FluffyAssetEditorUtility.HasUnsavedChanges(profile);
         }
 
         /// <summary>
@@ -144,55 +131,7 @@ namespace Fluffy.Editor
         /// </returns>
         public static bool DrawSaveButtons(FluffyProfile profile)
         {
-            bool dirty = HasUnsavedChanges(profile);
-            bool reverted = false;
-
-            using (new EditorGUI.DisabledScope(!dirty))
-            {
-                if (GUILayout.Button(RevertLabel, GUILayout.Width(56f)))
-                {
-                    RevertToDisk(profile, AssetDatabase.GetAssetPath(profile));
-                    reverted = true;
-                }
-
-                if (GUILayout.Button(SaveLabel, GUILayout.Width(46f)))
-                {
-                    AssetDatabase.SaveAssetIfDirty(profile);
-                }
-            }
-
-            return reverted;
-        }
-
-        /// <summary>Puts the profile back to the values held in its file.</summary>
-        /// <remarks>
-        /// The file is read into throwaway objects rather than through
-        /// <see cref="AssetDatabase.LoadAssetAtPath"/>, which hands back the instance
-        /// already loaded — the edited one — and would revert it to itself. The
-        /// throwaways are destroyed here because nothing else owns them: forgetting
-        /// them leaks a profile per press.
-        /// </remarks>
-        private static void RevertToDisk(FluffyProfile profile, string path)
-        {
-            Object[] fromDisk = InternalEditorUtility.LoadSerializedFileAndForget(path);
-
-            for (int i = 0; i < fromDisk.Length; i++)
-            {
-                if (fromDisk[i] is FluffyProfile saved)
-                {
-                    Undo.RecordObject(profile, "Revert Fluffy Profile");
-                    EditorUtility.CopySerialized(saved, profile);
-
-                    // It now matches the file, so it is no longer waiting to be written.
-                    EditorUtility.ClearDirty(profile);
-                    break;
-                }
-            }
-
-            for (int i = 0; i < fromDisk.Length; i++)
-            {
-                Object.DestroyImmediate(fromDisk[i]);
-            }
+            return FluffyAssetEditorUtility.DrawSaveButtons(profile, "Revert Fluffy Profile");
         }
     }
 }
