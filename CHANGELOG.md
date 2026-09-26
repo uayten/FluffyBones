@@ -311,5 +311,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial package scaffolding: assembly definitions, empty runtime and editor
   stubs, test assemblies, documentation and samples folders.
 
-[Unreleased]: https://github.com/uayten/fluffy-bones/compare/v0.0.1...HEAD
-[0.0.1]: https://github.com/uayten/fluffy-bones/releases/tag/v0.0.1
+[Unreleased]: https://github.com/uayten/FluffyBones/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/uayten/FluffyBones/releases/tag/v0.0.1

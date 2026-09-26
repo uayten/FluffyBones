@@ -17,11 +17,11 @@ physics — no rigidbodies, no joints, no physics scene setup.
 Unity Package Manager -> **Add package from git URL**:
 
 ```
-https://github.com/uayten/fluffy-bones.git
+https://github.com/uayten/FluffyBones.git
 ```
 
 The repository is private, so the machine installing it needs GitHub credentials
-configured. For SSH, use `ssh://git@github.com/uayten/fluffy-bones.git`. Pin a
+configured. For SSH, use `ssh://git@github.com/uayten/FluffyBones.git`. Pin a
 version by appending `#v0.0.1`.
 
 The path is relative to the consuming project's `Packages` folder.
